@@ -1,11 +1,21 @@
 import grpc
 from text_generation_server.pb import generate_pb2_grpc, generate_pb2
 from text_generation_server.models import Model, get_model
+from transformers import AutoTokenizer
+import torch
+from text_generation_server.utils import weight_hub_files, download_weights
+from text_generation_server.models.bloom import BloomCausalLMBatch, BLOOMSharded
 
 # put this file in ROOT\server, so you don't need to compile TGI
 
 # Start the local server:
 # SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve bigscience/bloom-560m --sharded
+
+model_id = "bigscience/bloom-560m"
+revision = "main"
+filenames = weight_hub_files(model_id, revision, ".safetensors")
+download_weights(filenames, model_id, revision)
+default_bloom = BLOOMSharded(model_id)
 
 req = generate_pb2.Request(
     inputs="What is deep learning?",
@@ -29,18 +39,24 @@ req = generate_pb2.Request(
         max_new_tokens=1024,
         stop_sequences=[],
         ignore_eos_token=True))
-requests = [req] * 1024
+requests = [req] * 1
+
+bloom_560m_tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m", padding_side="left")
+
+# Assemble input batch
+default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
+default_bloom_batch = BloomCausalLMBatch.from_pb(default_pb_batch, bloom_560m_tokenizer, torch.float32, torch.device("cuda"))
+
+generations, next_batch, _ = default_bloom.generate_token(default_bloom_batch)
 
 with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     # Info
     stub = generate_pb2_grpc.TextGenerationServiceStub(channel)
     print(stub.Info(generate_pb2.InfoRequest()))
 
-    # Assemble input batch
-    batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests), max_tokens = 0)
 
     # Warm up
-    wr = generate_pb2.WarmupRequest(batch = batch, max_total_tokens = 2048, max_prefill_tokens = 1024*10, max_input_length = 1024)
+    wr = generate_pb2.WarmupRequest(batch = default_pb_batch, max_total_tokens = 2048, max_prefill_tokens = 1024*10, max_input_length = 1024)
     stub.Warmup(wr)
 
     # Prefill
