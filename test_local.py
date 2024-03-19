@@ -6,11 +6,6 @@ import torch
 from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.bloom import BloomCausalLMBatch, BLOOMSharded
 
-# put this file in ROOT\server, so you don't need to compile TGI
-
-# Start the local server:
-# SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve bigscience/bloom-560m --sharded
-
 model_id = "bigscience/bloom-560m"
 revision = "main"
 filenames = weight_hub_files(model_id, revision, ".safetensors")
@@ -50,6 +45,11 @@ default_bloom_batch = BloomCausalLMBatch.from_pb(default_pb_batch, bloom_560m_to
 generations, next_batch, _ = default_bloom.generate_token(default_bloom_batch)
 
 #######################################
+
+# put this file in ROOT\server, so you don't need to compile TGI
+
+# Start the local server:
+# SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve bigscience/bloom-560m --sharded
 
 with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     # Info
