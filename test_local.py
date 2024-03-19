@@ -18,13 +18,6 @@ download_weights(filenames, model_id, revision)
 default_bloom = BLOOMSharded(model_id)
 bloom_560m_tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m", padding_side="left")
 
-# Assemble input batch
-default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
-
-default_bloom_batch = BloomCausalLMBatch.from_pb(default_pb_batch, bloom_560m_tokenizer, torch.float32, torch.device("cuda"))
-generations, next_batch, _ = default_bloom.generate_token(default_bloom_batch)
-
-
 # Try out prefill / decode from the client side
 request = generate_pb2.Request(
     inputs="What is deep learning?",
@@ -48,7 +41,15 @@ request = generate_pb2.Request(
         max_new_tokens=1024,
         stop_sequences=[],
         ignore_eos_token=True))
-requests = [req] * 1
+requests = [request] * 1
+
+# Assemble input batch
+default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
+
+default_bloom_batch = BloomCausalLMBatch.from_pb(default_pb_batch, bloom_560m_tokenizer, torch.float32, torch.device("cuda"))
+generations, next_batch, _ = default_bloom.generate_token(default_bloom_batch)
+
+#######################################
 
 with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     # Info
@@ -60,7 +61,7 @@ with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     stub.Warmup(wr)
 
     # Prefill
-    pr = generate_pb2.PrefillRequest(batch = batch)
+    pr = generate_pb2.PrefillRequest(batch = default_pb_batch)
     resp = stub.Prefill(pr)
     gen, cbatch = resp.generations, resp.batch
 
