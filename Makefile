@@ -14,7 +14,7 @@ codebase:
 
 install-server:
 	cd build/server && make install
-	cd punica_kernels && pip install -v --no-build-isolation .
+	cd build/server/punica_kernels && pip install -v --no-build-isolation .
 
 install-custom-kernels:
 	if [ "$$BUILD_EXTENSIONS" = "True" ]; then cd build/server/custom_kernels && python setup.py install; else echo "Custom kernels are disabled, you need to set the BUILD_EXTENSIONS environment variable to 'True' in order to build them. (Please read the docs, kernels might not work on all hardware)"; fi
