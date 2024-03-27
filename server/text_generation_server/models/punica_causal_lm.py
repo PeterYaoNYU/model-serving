@@ -19,7 +19,8 @@ from punica.ops import (
     rms_norm,
 )
 from punica.utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
-#from punica import LlamaForCausalLMWithLora
+from .custom_modeling.punica_llama import LlamaForCausalLM
+from .custom_modeling.punica_llama_lora import LlamaForCausalLMWithLora, LlamaLoraWeight, BatchedLlamaLoraWeight
 from punica.models.llama_lora import *
 import peft
 
