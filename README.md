@@ -1,4 +1,8 @@
 # Pytorch-MIL
+```bash
+git submodule sync
+git submodule update --init
+```
 
 ## To compile server code with kernels
 
