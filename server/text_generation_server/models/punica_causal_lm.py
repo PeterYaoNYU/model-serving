@@ -10,7 +10,7 @@ from transformers.models.llama.modeling_llama import (
     PreTrainedModel,
     #LlamaRMSNorm,
 )
-from punica.ops import (
+from punica_kernels import (
     add_lora_sgmv_custom_cutlass as add_lora,
     append_kv,
     batch_decode,
@@ -18,10 +18,9 @@ from punica.ops import (
     init_kv,
     rms_norm,
 )
-from punica.utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
-from .custom_modeling.punica_llama import LlamaForCausalLM
+from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
 from .custom_modeling.punica_llama_lora import LlamaForCausalLMWithLora, LlamaLoraWeight, BatchedLlamaLoraWeight
-from punica.models.llama_lora import *
+from .custom_modeling.punica_llama_lora import *
 import peft
 
 import time

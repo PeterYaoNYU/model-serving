@@ -1,7 +1,7 @@
 import torch
 
 import punica.ops._kernels as _kernels
-from punica.utils.kvcache import BatchedKvCache
+from text_generation_server.utils.punica_utils import BatchedKvCache
 
 _cache_buf = {}
 
