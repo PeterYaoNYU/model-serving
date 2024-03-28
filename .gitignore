@@ -16,3 +16,4 @@ model/
 *.env
 .coverage
 .vscode/
+.idea/

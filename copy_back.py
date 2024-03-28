@@ -23,9 +23,10 @@ def compare_dir_trees(dir1, dir2, compare_file_data, output):
 
 dirs = ['server', 'clients', 'launcher', 'benchmark', 'integration-tests', 'load_tests', 'proto', 'router']
 for dir in dirs:
-    dir_a = 'build/' + dir
-    dir_b = 'server/'
-    compare_dir_trees(dir_a, dir_b, compare_file_data, sys.stdout)
+    if os.path.exists(dir):
+        dir_a = 'build/' + dir
+        dir_b = dir
+        compare_dir_trees(dir_a, dir_b, compare_file_data, sys.stdout)
 
 #print(files)
 for file in files:
