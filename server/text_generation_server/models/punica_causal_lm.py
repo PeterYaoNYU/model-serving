@@ -223,9 +223,9 @@ class PunicaLM(Model):
         )
 
         # Forward pass
-        print(input_ids)
+        #print(input_ids)
         logits, _ = self.model(input_ids, blen, prefill_kv, decode_kv, lora)
-        print(logits.shape)
+        #print(logits.shape)
 
         ptr = 0
         out = []
@@ -238,7 +238,7 @@ class PunicaLM(Model):
             ptr += 1
 
         logits = torch.cat(out,dim=0)
-        print(logits.shape)
+        #print(logits.shape)
 
         generations: List[Generation] = []
         stopped = True
