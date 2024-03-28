@@ -28,7 +28,6 @@ for dir in dirs:
         dir_b = dir
         compare_dir_trees(dir_a, dir_b, compare_file_data, sys.stdout)
 
-#print(files)
 for file in files:
     print(file + " -> " + file.replace('build/', ''))
     os.remove(file.replace('build/', ''))
