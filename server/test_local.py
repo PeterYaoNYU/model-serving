@@ -10,6 +10,8 @@ import random
 llm = PunicaLM('punica')
 tokenizer = llm.tokenizer
 
+#print(tokenizer.decode([    1,  1724,   338,  6483,  6509, 29973, 21784], skip_special_tokens=True))
+
 def make_input():
     sentences = [
         'What is deep learning?',
