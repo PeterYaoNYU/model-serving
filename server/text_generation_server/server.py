@@ -161,6 +161,11 @@ class TextGenerationService(generate_pb2_grpc.TextGenerationServiceServicer):
             total_ns=time.time_ns() - start,
         )
 
+    async def AdapterControl(self, request, contexts):
+        print('=================GRPC request received=====================')
+        print(request)
+        print(contexts)
+
 
 def serve(
     model_id: str,
