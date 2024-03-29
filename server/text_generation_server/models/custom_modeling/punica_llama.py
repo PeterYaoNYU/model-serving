@@ -11,8 +11,8 @@ from transformers.models.llama.modeling_llama import (
     PreTrainedModel,
 )
 
-from punica.ops import append_kv, batch_decode, batch_prefill, init_kv, rms_norm
-from punica.utils import BatchedKvCache, BatchLenInfo
+from punica_kernels import append_kv, batch_decode, batch_prefill, init_kv, rms_norm
+from text_generation_server.utils.punica_utils import BatchedKvCache, BatchLenInfo
 
 
 class LlamaAttention(nn.Module):

@@ -10,7 +10,7 @@ from transformers.models.llama.modeling_llama import (
     PreTrainedModel,
     #LlamaRMSNorm,
 )
-from punica.ops import (
+from punica_kernels import (
     add_lora_sgmv_custom_cutlass as add_lora,
     append_kv,
     batch_decode,
@@ -18,9 +18,9 @@ from punica.ops import (
     init_kv,
     rms_norm,
 )
-from punica.utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
-#from punica import LlamaForCausalLMWithLora
-from punica.models.llama_lora import *
+from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
+from .custom_modeling.punica_llama_lora import LlamaForCausalLMWithLora, LlamaLoraWeight, BatchedLlamaLoraWeight
+from .custom_modeling.punica_llama_lora import *
 import peft
 
 import time
@@ -223,9 +223,9 @@ class PunicaLM(Model):
         )
 
         # Forward pass
-        print(input_ids)
+        #print(input_ids)
         logits, _ = self.model(input_ids, blen, prefill_kv, decode_kv, lora)
-        print(logits.shape)
+        #print(logits.shape)
 
         ptr = 0
         out = []
@@ -238,7 +238,7 @@ class PunicaLM(Model):
             ptr += 1
 
         logits = torch.cat(out,dim=0)
-        print(logits.shape)
+        #print(logits.shape)
 
         generations: List[Generation] = []
         stopped = True

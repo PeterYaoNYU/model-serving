@@ -17,3 +17,4 @@ model/
 .coverage
 .vscode/
 _build_meta.py
+.idea/
