@@ -19,9 +19,17 @@ def make_input():
         'I don not believe that!',
     ]
 
+    lora_id = [
+        "empty",
+        "gsm8k",
+        "gsm8k",
+    ]
+
+    id = random.randint(0, len(sentences)-1)
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
-        inputs=random.choice(sentences),
+        inputs=sentences[id],
+        lora_id=lora_id[id],
         id=0,
         truncate=1024,
         prefill_logprobs=True,

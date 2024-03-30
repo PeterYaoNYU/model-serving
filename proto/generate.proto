@@ -24,12 +24,12 @@ service TextGenerationService {
 }
 
 message AdapterControlRequest {
-    int model_id = 1;
-    int operations = 2;
+    string model_id = 1;
+    string operations = 2;
 }
 
 message AdapterControlResponse {
-    int status = 1;
+    string status = 1;
 }
 
 message HealthRequest {}
@@ -118,6 +118,8 @@ message Request {
     bool prefill_logprobs = 6;
     /// Return most likely n tokens
     uint32 top_n_tokens = 7;
+    /// LoRA adapter id
+    string lora_id = 8;
 }
 
 message Batch {

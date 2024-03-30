@@ -162,9 +162,9 @@ class TextGenerationService(generate_pb2_grpc.TextGenerationServiceServicer):
         )
 
     async def AdapterControl(self, request, contexts):
-        print('=================GRPC request received=====================')
-        print(request)
-        print(contexts)
+        return generate_pb2.AdapterControlResponse(
+            status="Adapter Control Done"
+        )
 
 
 def serve(

@@ -185,7 +185,7 @@ class PunicaLM(Model):
         decode_input_ids, decode_kv = [], []
         lora_ids, lora_lens = [], []
 
-        batch.lora_ids = ['empty' for _ in range(len(batch.requests))]
+        batch.lora_ids = [r.lora_id for r in batch.requests] #['empty' for _ in range(len(batch.requests))]
         #print(batch.input_ids)
         for i,(request,ids,stopc,lora_id) in enumerate(zip(
             batch.requests,

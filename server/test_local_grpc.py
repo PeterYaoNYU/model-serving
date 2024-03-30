@@ -11,12 +11,20 @@ def make_input():
     sentences = [
         'What is deep learning?',
         'What is the future of the earth?',
-        'I don not believe that!',
+        'Generate a correct SQL query from the following database schema.',
     ]
 
+    lora_id = [
+        "empty",
+        "gsm8k",
+        "gsm8k",
+    ]
+
+    id = random.randint(0, len(sentences)-1)
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
-        inputs=random.choice(sentences),
+        inputs=sentences[id],
+        lora_id=lora_id[id],
         id=0,
         truncate=1024,
         prefill_logprobs=True,
@@ -52,8 +60,12 @@ default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(re
 # SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve meta-llama/Llama-2-7b-hf
 
 with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
-    # Info
     stub = generate_pb2_grpc.TextGenerationServiceStub(channel)
+
+    # Load adapters
+    resp = stub.AdapterControl(generate_pb2.AdapterControlRequest())
+
+    # Info
     print(stub.Info(generate_pb2.InfoRequest()))
     # Warm up
     wr = generate_pb2.WarmupRequest(batch = default_pb_batch, max_total_tokens = 2048, max_prefill_tokens = 1024*10, max_input_length = 1024)
@@ -66,4 +78,5 @@ with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     dr = generate_pb2.DecodeRequest(batches = [cbatch])
     resp = stub.Decode(dr)
     gen, cbatch = resp.generations, resp.batch
+
     print('done')
