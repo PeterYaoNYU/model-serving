@@ -6,6 +6,8 @@ git submodule update --init
 
 ## To compile server code with kernels
 
+Make sure you compile/install FlashInfer first.
+
 ```bash
 make codebase
 make install-server
