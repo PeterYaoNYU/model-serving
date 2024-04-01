@@ -38,6 +38,7 @@ from text_generation_server.utils import NextTokenChooser, StoppingCriteria, Sam
 from dataclasses import dataclass
 from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
 
+from loguru import logger
 tracer = trace.get_tracer(__name__)
 
 from .causal_lm import CausalLMBatch
@@ -48,13 +49,13 @@ class PunicaBatch(CausalLMBatch):
 
 lora_paths = {
     'fin':'lora_weights/fingpt-forecaster_dow30_llama2-7b_lora',
-    'Chinese':'lora_weights/Chinese-Llama-2-LoRA-7B',
+    'Chinese':'lora_weights/chinese-alpaca-2-lora-7b',
 }
 
 class PunicaLM(Model):
     def __init__(
         self,
-        model_id: str,
+        model_id: str = None,
         revision: Optional[str] = None,
         quantize: Optional[str] = None,
         use_medusa: Optional[str] = None,
@@ -122,7 +123,7 @@ class PunicaLM(Model):
         )
         self.cache_pool = {}
         self.lora_weights = self.init_lora(
-            [],
+            ['fin','Chinese'],
             model_config,
             device=device,
             )
@@ -137,7 +138,7 @@ class PunicaLM(Model):
 
     def init_lora(
             self,
-            lora_ids: list[int],
+            lora_ids: list[str],
             model_config: LlamaConfig,
             device: torch.device,
             dtype=torch.float16,
@@ -161,10 +162,88 @@ class PunicaLM(Model):
                 lora_weight = LlamaLoraWeight(model_config, lora_rank*2, dtype, device)
             else:
                 lora_weight = LlamaLoraWeight(model_config, lora_rank, dtype, device)
-            #tmp = weight_convert(tmp,lora_rank)
+            def weight_convert(weights,rank):
+                qA = []
+                qB = []
+                kA = []
+                kB = []
+                vA = []
+                vB = []
+                oA = []
+                oB = []
+                gateA = []
+                gateB = []
+                upA = []
+                upB = []
+                downA = []
+                downB = []
+                for key in weights.keys():
+                    if 'q_proj' in key:
+                        if 'A' in key:
+                            qA.append(weights[key].unsqueeze(0))
+                        if 'B' in key:
+                            qB.append(weights[key].unsqueeze(0))
+                    if 'k_proj' in key:
+                        if 'A' in key:
+                            kA.append(weights[key].unsqueeze(0))    
+                        if 'B' in key:
+                            kB.append(weights[key].unsqueeze(0))
+                    if 'v_proj' in key:
+                        if 'A' in key:
+                            vA.append(weights[key].unsqueeze(0))    
+                        if 'B' in key:
+                            vB.append(weights[key].unsqueeze(0))
+                    if 'o_proj' in key:
+                        if 'A' in key:
+                            oA.append(weights[key].unsqueeze(0)) 
+                        if 'B' in key:
+                            oB.append(weights[key].unsqueeze(0))
+                    if 'gate_proj' in key:
+                        if 'A' in key:
+                            gateA.append(weights[key].unsqueeze(0))
+                        if 'B' in key:
+                            gateB.append(weights[key].unsqueeze(0))
+                    if 'up_proj' in key:
+                        if 'A' in key:
+                            upA.append(weights[key].unsqueeze(0))
+                        if 'B' in key:
+                            upB.append(weights[key].unsqueeze(0))
+                    if 'down_proj' in key:
+                        if 'A' in key:
+                            downA.append(weights[key].unsqueeze(0))
+                        if 'B' in key:
+                            downB.append(weights[key].unsqueeze(0))
+                weights = {
+                    'q.A':torch.cat(qA, dim=0) if qA else None,
+                    'q.B':torch.cat(qB, dim=0) if qB else None,
+                    'k.A':torch.cat(kA, dim=0) if kA else None,
+                    'k.B':torch.cat(kB, dim=0) if kB else None,
+                    'v.A':torch.cat(vA, dim=0) if vA else None,
+                    'v.B':torch.cat(vB, dim=0) if vB else None,
+                    'o.A':torch.cat(oA, dim=0) if oA else None,
+                    'o.B':torch.cat(oB, dim=0) if oB else None,
+                    'gate.A':torch.cat(gateA, dim=0) if gateA else None,
+                    'gate.B':torch.cat(gateB, dim=0) if gateB else None,
+                    'up.A':torch.cat(upA, dim=0) if upA else None,
+                    'up.B':torch.cat(upB, dim=0) if upB else None,
+                    'down.A':torch.cat(downA, dim=0) if downA else None,
+                    'down.B':torch.cat(downB, dim=0) if downB else None,
+                }
+                if rank == 8:
+                    for key in weights.keys():
+                        if weights[key] is not None:
+                            if 'A' in key:
+                                complement = torch.zeros_like(weights[key])
+                                weights[key] = torch.cat([weights[key], complement], dim=1)
+                            if 'B' in key:
+                                complement = torch.zeros_like(weights[key])
+                                weights[key] = torch.cat([weights[key], complement], dim=2)
+                return weights
+            tmp = weight_convert(tmp,lora_rank)
             lora_weight.copy_from_tensors(tmp)
             del tmp
             lora_weights[lora] = lora_weight
+            logger.info(f'{lora} loaded!')
         return lora_weights
 
     @property
@@ -186,7 +265,6 @@ class PunicaLM(Model):
         lora_ids, lora_lens = [], []
 
         batch.lora_ids = [r.lora_id for r in batch.requests] #['empty' for _ in range(len(batch.requests))]
-        #print(batch.input_ids)
         for i,(request,ids,stopc,lora_id) in enumerate(zip(
             batch.requests,
             batch.input_ids,
@@ -223,9 +301,7 @@ class PunicaLM(Model):
         )
 
         # Forward pass
-        #print(input_ids)
         logits, _ = self.model(input_ids, blen, prefill_kv, decode_kv, lora)
-        #print(logits.shape)
 
         ptr = 0
         out = []
@@ -238,7 +314,6 @@ class PunicaLM(Model):
             ptr += 1
 
         logits = torch.cat(out,dim=0)
-        #print(logits.shape)
 
         generations: List[Generation] = []
         stopped = True

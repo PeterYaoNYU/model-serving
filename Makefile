@@ -11,6 +11,7 @@ codebase:
 	cp -r third_party/text-generation-inference/server build/
 	cp third_party/text-generation-inference/Cargo*.* build/
 	cp -r server build/
+	cp -r proto build/
 
 install-server:
 	cd build/server && make install

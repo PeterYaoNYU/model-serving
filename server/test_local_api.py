@@ -12,25 +12,24 @@ tokenizer = llm.tokenizer
 
 #print(tokenizer.decode([    1,  1724,   338,  6483,  6509, 29973, 21784], skip_special_tokens=True))
 
-def make_input():
+def make_input(id = 0):
     sentences = [
         'What is deep learning?',
-        'What is the future of the earth?',
-        'I don not believe that!',
+        'What is the future of the America economy?',
+        '什么是人工智能？',
     ]
 
     lora_id = [
         "empty",
-        "gsm8k",
-        "gsm8k",
+        "fin",
+        "Chinese",
     ]
 
-    id = random.randint(0, len(sentences)-1)
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
         inputs=sentences[id],
         lora_id=lora_id[id],
-        id=0,
+        id=id,
         truncate=1024,
         prefill_logprobs=True,
         top_n_tokens=20,
@@ -52,13 +51,28 @@ def make_input():
             ignore_eos_token=True))
     return request
 
-req1 = make_input()
-req2 = make_input()
-requests = [req1, req2]
+requests = [make_input(0), make_input(1), make_input(2)]
 
 # Assemble input batch
 default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 
 default_batch = PunicaBatch.from_pb(default_pb_batch, tokenizer, torch.float32, torch.device("cuda"))
 generations, next_batch, _ = llm.generate_token(default_batch)
-print(generations[0].tokens.texts)
+for gen in generations:
+    print(gen.tokens.texts)
+
+generations, next_batch, _ = llm.generate_token(next_batch)
+for gen in generations:
+    print(gen.tokens.texts)
+
+#Continue generating
+batch = generate_pb2.Batch(id = 0, requests = [make_input(2)], size = 1)
+pb_batch = PunicaBatch.from_pb(batch, tokenizer, torch.float32, torch.device("cuda"))
+results = []
+for i in range(50):
+    generations, pb_batch, _ = llm.generate_token(pb_batch)
+    for gen in generations:
+        print(gen.tokens.texts)
+        results.append(gen.tokens.texts)
+
+print(results)
