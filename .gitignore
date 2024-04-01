@@ -18,3 +18,4 @@ model/
 .vscode/
 _build_meta.py
 .idea/
+lora_weights/
