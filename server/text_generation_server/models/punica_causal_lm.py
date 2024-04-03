@@ -3,24 +3,9 @@
 
 import math
 import torch
-from torch import device, dtype, nn
-from transformers.models.llama.modeling_llama import (
-    ACT2FN,
-    LlamaConfig,
-    PreTrainedModel,
-    #LlamaRMSNorm,
-)
-from punica_kernels import (
-    add_lora_sgmv_custom_cutlass as add_lora,
-    append_kv,
-    batch_decode,
-    batch_prefill,
-    init_kv,
-    rms_norm,
-)
+from transformers.models.llama.modeling_llama import LlamaConfig
 from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
 from .custom_modeling.punica_llama_lora import LlamaForCausalLMWithLora, LlamaLoraWeight, BatchedLlamaLoraWeight
-from .custom_modeling.punica_llama_lora import *
 import peft
 
 import time
@@ -36,7 +21,7 @@ from text_generation_server.models.types import (
 )
 from text_generation_server.utils import NextTokenChooser, StoppingCriteria, Sampling
 from dataclasses import dataclass
-from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedTokenizerBase
+from transformers import AutoTokenizer
 
 from loguru import logger
 tracer = trace.get_tracer(__name__)
