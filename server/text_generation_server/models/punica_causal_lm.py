@@ -5,9 +5,11 @@ import math
 import torch
 from transformers.models.llama.modeling_llama import LlamaConfig
 from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
-from .custom_modeling.punica_llama_lora import LlamaForCausalLMWithLora, LlamaLoraWeight, BatchedLlamaLoraWeight
+from .custom_modeling.punica_llama_lora import LlamaForCausalLM, LlamaLoraWeight, BatchedLlamaLoraWeight
 import peft
+from huggingface_hub import hf_hub_download
 
+import os
 import time
 from opentelemetry import trace
 from typing import Optional, Tuple, List, Type, Dict
@@ -32,15 +34,11 @@ from collections import defaultdict
 class PunicaBatch(CausalLMBatch):
     lora_ids = [] #it goes wrong when lora_ids: List[str] = []
 
-lora_paths = {
-    'fin':'lora_weights/fingpt-forecaster_dow30_llama2-7b_lora',
-    'Chinese':'lora_weights/chinese-alpaca-2-lora-7b',
-}
-
 class PunicaLM(Model):
     def __init__(
         self,
         model_id: str = None,
+        lora_ids: List[str] = None,
         revision: Optional[str] = None,
         quantize: Optional[str] = None,
         use_medusa: Optional[str] = None,
@@ -63,15 +61,15 @@ class PunicaLM(Model):
         self.device = device
 
         tokenizer = AutoTokenizer.from_pretrained(
-            "meta-llama/Llama-2-7b-hf",
+            model_id,
             revision=revision,
             padding_side="left",
             truncation_side="left",
             trust_remote_code=trust_remote_code,
             use_fast=True,
         )
-        model = LlamaForCausalLMWithLora.from_pretrained(
-            "meta-llama/Llama-2-7b-hf",
+        model = LlamaForCausalLM.from_pretrained(
+            model_id,
             revision=revision,
             torch_dtype=dtype,
             low_cpu_mem_usage=True,
@@ -108,7 +106,7 @@ class PunicaLM(Model):
         )
         self.cache_pool = {}
         self.lora_weights = self.init_lora(
-            ['fin','Chinese'],
+            lora_ids,
             model_config,
             device=device,
             )
@@ -137,31 +135,18 @@ class PunicaLM(Model):
         if lora_ids is None:
             return lora_weights
         for lora in lora_ids:
-            path = lora_paths[lora]
-            model_path = path+'/adapter_model.bin'
-            tmp = torch.load(
-                    model_path, map_location=device, weights_only=True
-                )
-            lora_rank = peft.config.PeftConfigMixin.from_json_file(path+'/adapter_config.json')['r']
+            model_path = hf_hub_download(lora, filename='adapter_model.bin')
+            config_path = hf_hub_download(lora, filename='adapter_config.json')
+            tmp = torch.load(model_path, map_location=device, weights_only=True)
+            lora_rank = peft.config.PeftConfigMixin.from_json_file(config_path)['r']
             if lora_rank < 16:
                 lora_weight = LlamaLoraWeight(model_config, lora_rank*2, dtype, device)
             else:
                 lora_weight = LlamaLoraWeight(model_config, lora_rank, dtype, device)
+
             def weight_convert(weights,rank):
-                qA = []
-                qB = []
-                kA = []
-                kB = []
-                vA = []
-                vB = []
-                oA = []
-                oB = []
-                gateA = []
-                gateB = []
-                upA = []
-                upB = []
-                downA = []
-                downB = []
+                qA, qB, kA, kB, vA, vB, oA, oB = [], [], [], [], [], [], [], []
+                gateA, gateB, upA, upB, downA, downB = [], [], [], [], [], []
                 for key in weights.keys():
                     if 'q_proj' in key:
                         if 'A' in key:
@@ -224,6 +209,7 @@ class PunicaLM(Model):
                                 complement = torch.zeros_like(weights[key])
                                 weights[key] = torch.cat([weights[key], complement], dim=2)
                 return weights
+
             tmp = weight_convert(tmp,lora_rank)
             lora_weight.copy_from_tensors(tmp)
             del tmp

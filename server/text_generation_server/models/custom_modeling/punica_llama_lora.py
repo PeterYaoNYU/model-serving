@@ -116,7 +116,7 @@ class BatchedLlamaLoraWeight:
         self.rank = weights[0].q.lora_rank
 
 
-class LlamaAttentionWithLora(nn.Module):
+class LlamaAttention(nn.Module):
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
         self.config = config
@@ -248,7 +248,7 @@ class LlamaAttentionWithLora(nn.Module):
         return o
 
 
-class LlamaMlpWithLora(nn.Module):
+class LlamaMlp(nn.Module):
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
         self.layer_idx = layer_idx
@@ -324,12 +324,12 @@ class LlamaRMSNorm(nn.Module):
         return rms_norm(hidden_states, self.weight, self.variance_epsilon)
 
 
-class LlamaDecoderLayerWithLora(nn.Module):
+class LlamaDecoderLayer(nn.Module):
     def __init__(self, config: LlamaConfig, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
-        self.self_attn = LlamaAttentionWithLora(config, layer_idx)
-        self.mlp = LlamaMlpWithLora(config, layer_idx)
+        self.self_attn = LlamaAttention(config, layer_idx)
+        self.mlp = LlamaMlp(config, layer_idx)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.post_attention_layernorm = LlamaRMSNorm(
             config.hidden_size, eps=config.rms_norm_eps
@@ -376,14 +376,14 @@ class LlamaPreTrainedModel(PreTrainedModel):
     config_class = LlamaConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = False
-    _no_split_modules = ["LlamaDecoderLayerWithLora"]
+    _no_split_modules = ["LlamaDecoderLayer"]
     _keys_to_ignore_on_load_unexpected = [
         r"decoder\.version",
         r"self_attn\.rotary_emb\.inv_freq",
     ]
 
 
-class LlamaModelWithLora(LlamaPreTrainedModel):
+class LlamaModel(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
@@ -393,7 +393,7 @@ class LlamaModelWithLora(LlamaPreTrainedModel):
         )
         self.layers = nn.ModuleList(
             [
-                LlamaDecoderLayerWithLora(config, i)
+                LlamaDecoderLayer(config, i)
                 for i in range(config.num_hidden_layers)
             ]
         )
@@ -424,10 +424,10 @@ class LlamaModelWithLora(LlamaPreTrainedModel):
         return hidden_states
 
 
-class LlamaForCausalLMWithLora(LlamaPreTrainedModel):
+class LlamaForCausalLM(LlamaPreTrainedModel):
     def __init__(self, config: LlamaConfig):
         super().__init__(config)
-        self.model = LlamaModelWithLora(config)
+        self.model = LlamaModel(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         self.post_init()
 
@@ -439,7 +439,7 @@ class LlamaForCausalLMWithLora(LlamaPreTrainedModel):
         decode_kv: BatchedKvCache | None,
         lora: BatchedLlamaLoraWeight = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        torch.cuda.nvtx.range_push("LlamaForCausalLMWithLora")
+        torch.cuda.nvtx.range_push("LlamaForCausalLM")
         hidden_states = self.model(input_ids, blen, prefill_kv, decode_kv, lora)
         torch.cuda.nvtx.range_push("lm_head")
         logits = self.lm_head(hidden_states)

@@ -37,7 +37,8 @@ def generate_text(txt_in, lora_id):
             return txt_out
 
 if __name__ == '__main__':
-    llm = PunicaLM('punica')
+    llm = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
+                   lora_ids= ['FinGPT/fingpt-forecaster_dow30_llama2-7b_lora', 'hfl/chinese-alpaca-2-lora-7b'])
     tokenizer = llm.tokenizer
     print('Model loaded!')
     
