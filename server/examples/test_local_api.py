@@ -7,9 +7,17 @@ from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 import random
 
-llm = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
-               lora_ids=['FinGPT/fingpt-forecaster_dow30_llama2-7b_lora', 'hfl/chinese-alpaca-2-lora-7b'])
-tokenizer = llm.tokenizer
+model = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
+               lora_ids=['hfl/chinese-alpaca-2-lora-7b'])
+print(model.get_lora_adapters())
+
+model.remove_lora_adapters(['all'])
+print(model.get_lora_adapters())
+
+model.load_lora_adapters(['FinGPT/fingpt-forecaster_dow30_llama2-7b_lora', 'hfl/chinese-alpaca-2-lora-7b'])
+print(model.get_lora_adapters())
+
+tokenizer = model.tokenizer
 
 #print(tokenizer.decode([    1,  1724,   338,  6483,  6509, 29973, 21784], skip_special_tokens=True))
 
@@ -58,11 +66,11 @@ requests = [make_input(0), make_input(1), make_input(2)]
 default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 
 default_batch = PunicaBatch.from_pb(default_pb_batch, tokenizer, torch.float32, torch.device("cuda"))
-generations, next_batch, _ = llm.generate_token(default_batch)
+generations, next_batch, _ = model.generate_token(default_batch)
 for gen in generations:
     print(gen.tokens.texts)
 
-generations, next_batch, _ = llm.generate_token(next_batch)
+generations, next_batch, _ = model.generate_token(next_batch)
 for gen in generations:
     print(gen.tokens.texts)
 
@@ -71,7 +79,7 @@ batch = generate_pb2.Batch(id = 0, requests = [make_input(2)], size = 1)
 pb_batch = PunicaBatch.from_pb(batch, tokenizer, torch.float32, torch.device("cuda"))
 results = []
 for i in range(50):
-    generations, pb_batch, _ = llm.generate_token(pb_batch)
+    generations, pb_batch, _ = model.generate_token(pb_batch)
     for gen in generations:
         print(gen.tokens.texts)
         results.append(gen.tokens.texts)

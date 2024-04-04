@@ -138,6 +138,7 @@ class PunicaLM(Model):
         for lora_id in lora_ids:
             if lora_id != 'empty' and lora_id in self.lora_weights:
                 del self.lora_weights[lora_id]
+                logger.info(f'{lora_id} removed!')
 
     def get_lora_adapters(self):
         return list(self.lora_weights)
