@@ -95,19 +95,25 @@ class PunicaLM(Model):
             else:
                 tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
-        model_config = model.config
+        self.model_config = model.config
         self.kvpool = KvPool(
-            num_layers=model_config.num_hidden_layers,
-            num_heads=model_config.num_attention_heads,
-            head_dim=model_config.hidden_size // model_config.num_attention_heads,
+            num_layers=self.model_config.num_hidden_layers,
+            num_heads=self.model_config.num_attention_heads,
+            head_dim=self.model_config.hidden_size // self.model_config.num_attention_heads,
             page_len=16,
             dtype=dtype,
             device=device,
         )
         self.cache_pool = {}
-        self.lora_weights = self.init_lora(
+
+        self.lora_weights = {}
+        self.defalut_rank = 16
+        self.lora_weights["empty"] = LlamaLoraWeight(
+                self.model_config, self.defalut_rank, dtype, device
+            )
+        self.init_lora(
             lora_ids,
-            model_config,
+            self.model_config,
             device=device,
             )
 
@@ -119,6 +125,23 @@ class PunicaLM(Model):
             device=device,
         )
 
+    def load_lora_adapters(self, lora_ids: list[str]):
+        self.init_lora(
+            lora_ids,
+            self.model_config,
+            device=self.device,
+            )
+
+    def remove_lora_adapters(self, lora_ids: list[str]):
+        if len(lora_ids) == 1 and lora_ids[0] == 'all':
+            lora_ids = list(self.lora_weights)
+        for lora_id in lora_ids:
+            if lora_id != 'empty' and lora_id in self.lora_weights:
+                del self.lora_weights[lora_id]
+
+    def get_lora_adapters(self):
+        return list(self.lora_weights)
+
     def init_lora(
             self,
             lora_ids: list[str],
@@ -126,96 +149,90 @@ class PunicaLM(Model):
             device: torch.device,
             dtype=torch.float16,
             ):
-
-        lora_weights = {}
-        defalut_rank = 16
-        lora_weights["empty"] = LlamaLoraWeight(
-                model_config, defalut_rank, dtype, device
-            )
         if lora_ids is None:
-            return lora_weights
-        for lora in lora_ids:
-            model_path = hf_hub_download(lora, filename='adapter_model.bin')
-            config_path = hf_hub_download(lora, filename='adapter_config.json')
-            tmp = torch.load(model_path, map_location=device, weights_only=True)
-            lora_rank = peft.config.PeftConfigMixin.from_json_file(config_path)['r']
-            if lora_rank < 16:
-                lora_weight = LlamaLoraWeight(model_config, lora_rank*2, dtype, device)
-            else:
-                lora_weight = LlamaLoraWeight(model_config, lora_rank, dtype, device)
+            return
+        for lora_id in lora_ids:
+            if lora_id not in self.lora_weights:
+                model_path = hf_hub_download(lora_id, filename='adapter_model.bin')
+                config_path = hf_hub_download(lora_id, filename='adapter_config.json')
+                tmp = torch.load(model_path, map_location=device, weights_only=True)
+                lora_rank = peft.config.PeftConfigMixin.from_json_file(config_path)['r']
+                if lora_rank < 16:
+                    lora_weight = LlamaLoraWeight(model_config, lora_rank*2, dtype, device)
+                else:
+                    lora_weight = LlamaLoraWeight(model_config, lora_rank, dtype, device)
 
-            def weight_convert(weights,rank):
-                qA, qB, kA, kB, vA, vB, oA, oB = [], [], [], [], [], [], [], []
-                gateA, gateB, upA, upB, downA, downB = [], [], [], [], [], []
-                for key in weights.keys():
-                    if 'q_proj' in key:
-                        if 'A' in key:
-                            qA.append(weights[key].unsqueeze(0))
-                        if 'B' in key:
-                            qB.append(weights[key].unsqueeze(0))
-                    if 'k_proj' in key:
-                        if 'A' in key:
-                            kA.append(weights[key].unsqueeze(0))    
-                        if 'B' in key:
-                            kB.append(weights[key].unsqueeze(0))
-                    if 'v_proj' in key:
-                        if 'A' in key:
-                            vA.append(weights[key].unsqueeze(0))    
-                        if 'B' in key:
-                            vB.append(weights[key].unsqueeze(0))
-                    if 'o_proj' in key:
-                        if 'A' in key:
-                            oA.append(weights[key].unsqueeze(0)) 
-                        if 'B' in key:
-                            oB.append(weights[key].unsqueeze(0))
-                    if 'gate_proj' in key:
-                        if 'A' in key:
-                            gateA.append(weights[key].unsqueeze(0))
-                        if 'B' in key:
-                            gateB.append(weights[key].unsqueeze(0))
-                    if 'up_proj' in key:
-                        if 'A' in key:
-                            upA.append(weights[key].unsqueeze(0))
-                        if 'B' in key:
-                            upB.append(weights[key].unsqueeze(0))
-                    if 'down_proj' in key:
-                        if 'A' in key:
-                            downA.append(weights[key].unsqueeze(0))
-                        if 'B' in key:
-                            downB.append(weights[key].unsqueeze(0))
-                weights = {
-                    'q.A':torch.cat(qA, dim=0) if qA else None,
-                    'q.B':torch.cat(qB, dim=0) if qB else None,
-                    'k.A':torch.cat(kA, dim=0) if kA else None,
-                    'k.B':torch.cat(kB, dim=0) if kB else None,
-                    'v.A':torch.cat(vA, dim=0) if vA else None,
-                    'v.B':torch.cat(vB, dim=0) if vB else None,
-                    'o.A':torch.cat(oA, dim=0) if oA else None,
-                    'o.B':torch.cat(oB, dim=0) if oB else None,
-                    'gate.A':torch.cat(gateA, dim=0) if gateA else None,
-                        'gate.B':torch.cat(gateB, dim=0) if gateB else None,
-                    'up.A':torch.cat(upA, dim=0) if upA else None,
-                    'up.B':torch.cat(upB, dim=0) if upB else None,
-                    'down.A':torch.cat(downA, dim=0) if downA else None,
-                    'down.B':torch.cat(downB, dim=0) if downB else None,
-                }
-                if rank == 8:
+                def weight_convert(weights,rank):
+                    qA, qB, kA, kB, vA, vB, oA, oB = [], [], [], [], [], [], [], []
+                    gateA, gateB, upA, upB, downA, downB = [], [], [], [], [], []
                     for key in weights.keys():
-                        if weights[key] is not None:
+                        if 'q_proj' in key:
                             if 'A' in key:
-                                complement = torch.zeros_like(weights[key])
-                                weights[key] = torch.cat([weights[key], complement], dim=1)
+                                qA.append(weights[key].unsqueeze(0))
                             if 'B' in key:
-                                complement = torch.zeros_like(weights[key])
-                                weights[key] = torch.cat([weights[key], complement], dim=2)
-                return weights
+                                qB.append(weights[key].unsqueeze(0))
+                        if 'k_proj' in key:
+                            if 'A' in key:
+                                kA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                kB.append(weights[key].unsqueeze(0))
+                        if 'v_proj' in key:
+                            if 'A' in key:
+                                vA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                vB.append(weights[key].unsqueeze(0))
+                        if 'o_proj' in key:
+                            if 'A' in key:
+                                oA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                oB.append(weights[key].unsqueeze(0))
+                        if 'gate_proj' in key:
+                            if 'A' in key:
+                                gateA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                gateB.append(weights[key].unsqueeze(0))
+                        if 'up_proj' in key:
+                            if 'A' in key:
+                                upA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                upB.append(weights[key].unsqueeze(0))
+                        if 'down_proj' in key:
+                            if 'A' in key:
+                                downA.append(weights[key].unsqueeze(0))
+                            if 'B' in key:
+                                downB.append(weights[key].unsqueeze(0))
+                    weights = {
+                        'q.A':torch.cat(qA, dim=0) if qA else None,
+                        'q.B':torch.cat(qB, dim=0) if qB else None,
+                        'k.A':torch.cat(kA, dim=0) if kA else None,
+                        'k.B':torch.cat(kB, dim=0) if kB else None,
+                        'v.A':torch.cat(vA, dim=0) if vA else None,
+                        'v.B':torch.cat(vB, dim=0) if vB else None,
+                        'o.A':torch.cat(oA, dim=0) if oA else None,
+                        'o.B':torch.cat(oB, dim=0) if oB else None,
+                        'gate.A':torch.cat(gateA, dim=0) if gateA else None,
+                            'gate.B':torch.cat(gateB, dim=0) if gateB else None,
+                        'up.A':torch.cat(upA, dim=0) if upA else None,
+                        'up.B':torch.cat(upB, dim=0) if upB else None,
+                        'down.A':torch.cat(downA, dim=0) if downA else None,
+                        'down.B':torch.cat(downB, dim=0) if downB else None,
+                    }
+                    if rank == 8:
+                        for key in weights.keys():
+                            if weights[key] is not None:
+                                if 'A' in key:
+                                    complement = torch.zeros_like(weights[key])
+                                    weights[key] = torch.cat([weights[key], complement], dim=1)
+                                if 'B' in key:
+                                    complement = torch.zeros_like(weights[key])
+                                    weights[key] = torch.cat([weights[key], complement], dim=2)
+                    return weights
 
-            tmp = weight_convert(tmp,lora_rank)
-            lora_weight.copy_from_tensors(tmp)
-            del tmp
-            lora_weights[lora] = lora_weight
-            logger.info(f'{lora} loaded!')
-        return lora_weights
+                tmp = weight_convert(tmp,lora_rank)
+                lora_weight.copy_from_tensors(tmp)
+                del tmp
+                self.lora_weights[lora_id] = lora_weight
+                logger.info(f'{lora_id} loaded!')
 
     @property
     def batch_type(self) -> Type[PunicaBatch]:

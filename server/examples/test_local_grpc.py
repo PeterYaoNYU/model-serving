@@ -7,6 +7,11 @@ from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 import random
 
+# put this file in ROOT\server, so you don't need to compile TGI
+
+# Start the local server:
+# SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve meta-llama/Llama-2-7b-hf
+
 def make_input():
     sentences = [
         'What is deep learning?',
@@ -16,8 +21,8 @@ def make_input():
 
     lora_id = [
         "empty",
-        "gsm8k",
-        "gsm8k",
+        "hfl/chinese-alpaca-2-lora-7b",
+        "FinGPT/fingpt-forecaster_dow30_llama2-7b_lora",
     ]
 
     id = random.randint(0, len(sentences)-1)
@@ -54,16 +59,22 @@ requests = [req1, req2]
 # Assemble input batch
 default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 
-# put this file in ROOT\server, so you don't need to compile TGI
-
-# Start the local server:
-# SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve meta-llama/Llama-2-7b-hf
-
 with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
     stub = generate_pb2_grpc.TextGenerationServiceStub(channel)
 
-    # Load adapters
-    resp = stub.AdapterControl(generate_pb2.AdapterControlRequest())
+    # Test adapter loading and offloading
+    stub.AdapterControl(generate_pb2.AdapterControlRequest(
+        lora_ids='all',
+        operation='remove'
+    ))
+    stub.AdapterControl(generate_pb2.AdapterControlRequest(
+        lora_ids='hfl/chinese-alpaca-2-lora-7b,FinGPT/fingpt-forecaster_dow30_llama2-7b_lora',
+        operation='load'
+    ))
+    resp = stub.AdapterControl(generate_pb2.AdapterControlRequest(
+        operation='status'
+    ))
+    print(resp)
 
     # Info
     print(stub.Info(generate_pb2.InfoRequest()))

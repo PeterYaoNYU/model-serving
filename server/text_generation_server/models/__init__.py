@@ -4,7 +4,7 @@ from loguru import logger
 from transformers.configuration_utils import PretrainedConfig
 from transformers.models.auto import modeling_auto
 from huggingface_hub import hf_hub_download
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 from text_generation_server.utils.speculate import get_speculate, set_speculate
@@ -105,7 +105,7 @@ if MAMBA_AVAILABLE:
 
 FLASHINFER_AVAILABLE = True
 try:
-    import flashinfer
+    pass #import flashinfer
 except ImportError as e:
     logger.warning(f"Could not import FlashInfer: {e}")
     FLASHINFER_AVAILABLE = False
@@ -118,6 +118,7 @@ def get_model(
     speculate: Optional[int],
     dtype: Optional[str],
     trust_remote_code: bool,
+    lora_ids: Optional[List[str]]
 ) -> Model:
     if dtype is None:
         # Keep it as default for now and let
@@ -325,7 +326,7 @@ def get_model(
 
     elif model_type == "llama" or model_type == "baichuan":
         if FLASHINFER_AVAILABLE:
-            return PunicaLM('punica')
+            return PunicaLM(model_id, lora_ids)
         elif FLASH_ATTENTION:
             return FlashLlama(
                 model_id,

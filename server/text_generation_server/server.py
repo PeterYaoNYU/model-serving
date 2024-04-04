@@ -162,9 +162,16 @@ class TextGenerationService(generate_pb2_grpc.TextGenerationServiceServicer):
         )
 
     async def AdapterControl(self, request, contexts):
-        return generate_pb2.AdapterControlResponse(
-            status="Adapter Control Done"
-        )
+        if request.operation == 'load':
+            self.model.load_lora_adapters(request.lora_ids.split(','))
+            return generate_pb2.AdapterControlResponse(status= "success")
+        elif request.operation == 'remove':
+            self.model.remove_lora_adapters(request.lora_ids.split(','))
+            return generate_pb2.AdapterControlResponse(status= "success")
+        elif request.operation == 'status':
+            adapters = self.model.get_lora_adapters()
+            return generate_pb2.AdapterControlResponse(status= str(adapters))
+
 
 
 def serve(
@@ -176,6 +183,7 @@ def serve(
     dtype: Optional[str],
     trust_remote_code: bool,
     uds_path: Path,
+    lora_ids: Optional[List[str]]
 ):
     async def serve_inner(
         model_id: str,
@@ -206,6 +214,7 @@ def serve(
                 speculate,
                 dtype,
                 trust_remote_code,
+                lora_ids
             )
         except Exception:
             logger.exception("Error when initializing model")

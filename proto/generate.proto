@@ -24,8 +24,9 @@ service TextGenerationService {
 }
 
 message AdapterControlRequest {
-    string model_id = 1;
-    string operations = 2;
+    /// delimitered by comma
+    optional string lora_ids = 1;
+    string operation = 2;
 }
 
 message AdapterControlResponse {
