@@ -7,7 +7,8 @@ from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 import random
 
-llm = PunicaLM('punica')
+llm = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
+               lora_ids=['FinGPT/fingpt-forecaster_dow30_llama2-7b_lora', 'hfl/chinese-alpaca-2-lora-7b'])
 tokenizer = llm.tokenizer
 
 #print(tokenizer.decode([    1,  1724,   338,  6483,  6509, 29973, 21784], skip_special_tokens=True))
@@ -21,8 +22,8 @@ def make_input(id = 0):
 
     lora_id = [
         "empty",
-        "fin",
-        "Chinese",
+        "hfl/chinese-alpaca-2-lora-7b",
+        "FinGPT/fingpt-forecaster_dow30_llama2-7b_lora",
     ]
 
     # Try out prefill / decode from the client side
