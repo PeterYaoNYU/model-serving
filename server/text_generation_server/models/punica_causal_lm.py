@@ -193,7 +193,7 @@ class PunicaLM(Model):
                     'o.A':torch.cat(oA, dim=0) if oA else None,
                     'o.B':torch.cat(oB, dim=0) if oB else None,
                     'gate.A':torch.cat(gateA, dim=0) if gateA else None,
-                    'gate.B':torch.cat(gateB, dim=0) if gateB else None,
+                        'gate.B':torch.cat(gateB, dim=0) if gateB else None,
                     'up.A':torch.cat(upA, dim=0) if upA else None,
                     'up.B':torch.cat(upB, dim=0) if upB else None,
                     'down.A':torch.cat(downA, dim=0) if downA else None,
