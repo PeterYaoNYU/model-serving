@@ -105,7 +105,7 @@ if MAMBA_AVAILABLE:
 
 FLASHINFER_AVAILABLE = True
 try:
-    pass #import flashinfer
+    import flashinfer
 except ImportError as e:
     logger.warning(f"Could not import FlashInfer: {e}")
     FLASHINFER_AVAILABLE = False

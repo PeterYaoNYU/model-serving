@@ -8,7 +8,6 @@ import torch
 
 @dataclasses.dataclass
 class LoraSpec:
-    weight_path: pathlib.Path
     lora_prompts: list[str]
     base_prompts: list[str]
 
@@ -20,15 +19,6 @@ class DemoSpec:
     base_template: str
     example_template: str
     jsonl: str
-
-    def download(self, model_dir: pathlib.Path) -> pathlib.Path:
-        filename = self.weight_url.split("/")[-1]
-        weight_path = model_dir / filename
-        if not weight_path.exists():
-            print(f"Downloading {self.weight_url} to {weight_path}")
-            model_dir.mkdir(parents=True, exist_ok=True)
-            torch.hub.download_url_to_file(self.weight_url, str(weight_path))
-        return weight_path
 
     def generate_prompts(self):
         rng = np.random.Generator(np.random.PCG64(0xABCDABCD987))

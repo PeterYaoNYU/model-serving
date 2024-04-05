@@ -4,7 +4,7 @@
 import math
 import torch
 from transformers.models.llama.modeling_llama import LlamaConfig
-from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache
+from text_generation_server.utils.punica_utils import BatchedKvCache, BatchedLoraWeight, BatchLenInfo, LoraWeight, KvPool, KvCache, convert_lora_weight
 from .custom_modeling.punica_llama_lora import LlamaForCausalLM, LlamaLoraWeight, BatchedLlamaLoraWeight
 import peft
 from huggingface_hub import hf_hub_download
@@ -30,6 +30,73 @@ tracer = trace.get_tracer(__name__)
 
 from .causal_lm import CausalLMBatch
 from collections import defaultdict
+
+def weight_convert(weights, rank):
+    qA, qB, kA, kB, vA, vB, oA, oB = [], [], [], [], [], [], [], []
+    gateA, gateB, upA, upB, downA, downB = [], [], [], [], [], []
+    for key in weights.keys():
+        if 'q_proj' in key:
+            if 'A' in key:
+                qA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                qB.append(weights[key].unsqueeze(0))
+        if 'k_proj' in key:
+            if 'A' in key:
+                kA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                kB.append(weights[key].unsqueeze(0))
+        if 'v_proj' in key:
+            if 'A' in key:
+                vA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                vB.append(weights[key].unsqueeze(0))
+        if 'o_proj' in key:
+            if 'A' in key:
+                oA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                oB.append(weights[key].unsqueeze(0))
+        if 'gate_proj' in key:
+            if 'A' in key:
+                gateA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                gateB.append(weights[key].unsqueeze(0))
+        if 'up_proj' in key:
+            if 'A' in key:
+                upA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                upB.append(weights[key].unsqueeze(0))
+        if 'down_proj' in key:
+            if 'A' in key:
+                downA.append(weights[key].unsqueeze(0))
+            if 'B' in key:
+                downB.append(weights[key].unsqueeze(0))
+    weights = {
+        'q.A': torch.cat(qA, dim=0) if qA else None,
+        'q.B': torch.cat(qB, dim=0) if qB else None,
+        'k.A': torch.cat(kA, dim=0) if kA else None,
+        'k.B': torch.cat(kB, dim=0) if kB else None,
+        'v.A': torch.cat(vA, dim=0) if vA else None,
+        'v.B': torch.cat(vB, dim=0) if vB else None,
+        'o.A': torch.cat(oA, dim=0) if oA else None,
+        'o.B': torch.cat(oB, dim=0) if oB else None,
+        'gate.A': torch.cat(gateA, dim=0) if gateA else None,
+        'gate.B': torch.cat(gateB, dim=0) if gateB else None,
+        'up.A': torch.cat(upA, dim=0) if upA else None,
+        'up.B': torch.cat(upB, dim=0) if upB else None,
+        'down.A': torch.cat(downA, dim=0) if downA else None,
+        'down.B': torch.cat(downB, dim=0) if downB else None,
+    }
+    if rank == 8:
+        for key in weights.keys():
+            if weights[key] is not None:
+                if 'A' in key:
+                    complement = torch.zeros_like(weights[key])
+                    weights[key] = torch.cat([weights[key], complement], dim=1)
+                if 'B' in key:
+                    complement = torch.zeros_like(weights[key])
+                    weights[key] = torch.cat([weights[key], complement], dim=2)
+    return weights
+
 @dataclass
 class PunicaBatch(CausalLMBatch):
     lora_ids = [] #it goes wrong when lora_ids: List[str] = []
@@ -43,7 +110,7 @@ class PunicaLM(Model):
         quantize: Optional[str] = None,
         use_medusa: Optional[str] = None,
         dtype: Optional[torch.dtype] = None,
-        trust_remote_code: bool = False,
+        trust_remote_code: bool = False
     ):
         if use_medusa:
             raise RuntimeError("Medusa decoding is not enabled for AutoModel")
@@ -129,7 +196,7 @@ class PunicaLM(Model):
         self.init_lora(
             lora_ids,
             self.model_config,
-            device=self.device,
+            device=self.device
             )
 
     def remove_lora_adapters(self, lora_ids: list[str]):
@@ -162,73 +229,6 @@ class PunicaLM(Model):
                     lora_weight = LlamaLoraWeight(model_config, lora_rank*2, dtype, device)
                 else:
                     lora_weight = LlamaLoraWeight(model_config, lora_rank, dtype, device)
-
-                def weight_convert(weights,rank):
-                    qA, qB, kA, kB, vA, vB, oA, oB = [], [], [], [], [], [], [], []
-                    gateA, gateB, upA, upB, downA, downB = [], [], [], [], [], []
-                    for key in weights.keys():
-                        if 'q_proj' in key:
-                            if 'A' in key:
-                                qA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                qB.append(weights[key].unsqueeze(0))
-                        if 'k_proj' in key:
-                            if 'A' in key:
-                                kA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                kB.append(weights[key].unsqueeze(0))
-                        if 'v_proj' in key:
-                            if 'A' in key:
-                                vA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                vB.append(weights[key].unsqueeze(0))
-                        if 'o_proj' in key:
-                            if 'A' in key:
-                                oA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                oB.append(weights[key].unsqueeze(0))
-                        if 'gate_proj' in key:
-                            if 'A' in key:
-                                gateA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                gateB.append(weights[key].unsqueeze(0))
-                        if 'up_proj' in key:
-                            if 'A' in key:
-                                upA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                upB.append(weights[key].unsqueeze(0))
-                        if 'down_proj' in key:
-                            if 'A' in key:
-                                downA.append(weights[key].unsqueeze(0))
-                            if 'B' in key:
-                                downB.append(weights[key].unsqueeze(0))
-                    weights = {
-                        'q.A':torch.cat(qA, dim=0) if qA else None,
-                        'q.B':torch.cat(qB, dim=0) if qB else None,
-                        'k.A':torch.cat(kA, dim=0) if kA else None,
-                        'k.B':torch.cat(kB, dim=0) if kB else None,
-                        'v.A':torch.cat(vA, dim=0) if vA else None,
-                        'v.B':torch.cat(vB, dim=0) if vB else None,
-                        'o.A':torch.cat(oA, dim=0) if oA else None,
-                        'o.B':torch.cat(oB, dim=0) if oB else None,
-                        'gate.A':torch.cat(gateA, dim=0) if gateA else None,
-                            'gate.B':torch.cat(gateB, dim=0) if gateB else None,
-                        'up.A':torch.cat(upA, dim=0) if upA else None,
-                        'up.B':torch.cat(upB, dim=0) if upB else None,
-                        'down.A':torch.cat(downA, dim=0) if downA else None,
-                        'down.B':torch.cat(downB, dim=0) if downB else None,
-                    }
-                    if rank == 8:
-                        for key in weights.keys():
-                            if weights[key] is not None:
-                                if 'A' in key:
-                                    complement = torch.zeros_like(weights[key])
-                                    weights[key] = torch.cat([weights[key], complement], dim=1)
-                                if 'B' in key:
-                                    complement = torch.zeros_like(weights[key])
-                                    weights[key] = torch.cat([weights[key], complement], dim=2)
-                    return weights
-
                 tmp = weight_convert(tmp,lora_rank)
                 lora_weight.copy_from_tensors(tmp)
                 del tmp
