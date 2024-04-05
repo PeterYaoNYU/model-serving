@@ -60,22 +60,18 @@ def make_input(id = 0):
             ignore_eos_token=True))
     return request
 
-requests = [make_input(0), make_input(1), make_input(2)]
+#ok
+requests = [make_input(0), make_input(1)]
+#ok
+requests = [make_input(1), make_input(1)]
+#ok
+requests = [make_input(0), make_input(2)]
+#doesn't show correctly
+requests = [make_input(2), make_input(2)]
+#RuntimeError: CUDA error: CUBLAS_STATUS_INTERNAL_ERROR when calling `cublasGemmEx( handle, opa, opb, m, n, k, &falpha, a, CUDA_R_16F, lda, b, CUDA_R_16F, ldb, &fbeta, c, CUDA_R_16F, ldc, CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP)`
+requests = [make_input(1), make_input(2)]
 
-# Assemble input batch
-default_pb_batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
-
-default_batch = PunicaBatch.from_pb(default_pb_batch, tokenizer, torch.float32, torch.device("cuda"))
-generations, next_batch, _ = model.generate_token(default_batch)
-for gen in generations:
-    print(gen.tokens.texts)
-
-generations, next_batch, _ = model.generate_token(next_batch)
-for gen in generations:
-    print(gen.tokens.texts)
-
-#Continue generating
-batch = generate_pb2.Batch(id = 0, requests = [make_input(2)], size = 1)
+batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 pb_batch = PunicaBatch.from_pb(batch, tokenizer, torch.float32, torch.device("cuda"))
 results = []
 for i in range(50):
@@ -84,4 +80,4 @@ for i in range(50):
         print(gen.tokens.texts)
         results.append(gen.tokens.texts)
 
-print(results)
+print(''.join([r[0] for r in results]))
