@@ -6,7 +6,7 @@ from text_generation_server.pb import generate_pb2_grpc, generate_pb2
 
 import dataclasses, pathlib
 import threading
-import time
+import time, random
 from collections.abc import Callable
 from test_cases import DEMO, LoraSpec
 
@@ -39,10 +39,10 @@ class MultiLora:
                                          'abcdabcd987/sqlctx-llama2-7b-lora-16',
                                          'abcdabcd987/viggo-llama2-7b-lora-16'])
         self.tokenizer = self.model.tokenizer
+        self.rid = 0
 
         # Create text generation requests
-        self.rng = np.random.Generator(np.random.PCG64(0xABCDABCD987))
-        self.reqctx: dict[tuple[str, str], TextGeneration] = {}
+        self.reqctx: dict[tuple[str, str], generate_pb2.Request] = {}
         for model_name in lora_specs:
             for lora_or_base in ["lora", "base"]:
                 self._create_request(model_name, lora_or_base)
@@ -56,39 +56,25 @@ class MultiLora:
             lora_id = "empty"
         else:
             raise ValueError(f"Unknown lora_or_base={lora_or_base}")
-        prompt = self.rng.choice(prompts)
-        input_ids = self.tokenizer.encode(prompt)
-
+        prompt = random.choice(prompts)
         request = generate_pb2.Request(
-            inputs=prompts,
+            inputs=prompt,
             lora_id=lora_id,
-            id=id,
+            id=self.rid,
             truncate=1024,
             prefill_logprobs=True,
             top_n_tokens=20,
             parameters=generate_pb2.NextTokenChooserParameters(
                 temperature=0.9,
-                top_k=-1,
+                top_k=0,
                 top_p=0.9,
                 repetition_penalty=1.1,),
             stopping_parameters=generate_pb2.StoppingCriteriaParameters(
                 max_new_tokens=1024,
                 stop_sequences=[],
                 ignore_eos_token=True))
-
-        textgen = TextGeneration(
-            input_ids=input_ids,
-            kvpool=self.model.kvpool,
-            lora_id=lora_id,
-            tokenizer=self.tokenizer,
-            temperature=0.9,
-            repetition_penalty=1.1,
-            top_p=0.9,
-            top_k=-1,
-            maxlen=1024,
-            stop_token_id=self.tokenizer.eos_token_id,
-        )
-        self.reqctx[(model_name, lora_or_base)] = textgen
+        self.rid += 1
+        self.reqctx[(model_name, lora_or_base)] = {"request": request, "is_prefill": False}
 
     def _delete_request(
         self,
@@ -96,7 +82,7 @@ class MultiLora:
         lora_or_base: str,
     ):
         reqctx = self.reqctx[(model_name, lora_or_base)]
-        reqctx.kvcache.release()
+        #reqctx.kvcache.release()
         del self.reqctx[(model_name, lora_or_base)]
 
     def stop(self):
@@ -108,29 +94,18 @@ class MultiLora:
     ):
         time.sleep(0.1)
         for (model_name, lora_or_base), reqctx in self.reqctx.items():
-            append_box(f"{model_name}-{lora_or_base}", reqctx.decode_tokens())
+            append_box(f"{model_name}-{lora_or_base}", reqctx.inputs)
 
         while not self.stop_signal.is_set():
             # Put prefill requests first, then sort by lora_id.
             reqs = sorted(
                 self.reqctx.items(),
-                key=lambda kv: (not kv[1].is_prefill(), kv[1].lora_id),
+                key=lambda kv: (not kv[1]["is_prefill"], kv[1].lora_id),
             )
 
 
-            # Postprocess
-            for i, ((model_name, lora_or_base), reqctx) in enumerate(reqs):
-                next_token_id = reqctx.get_next_token_id(logits[i].unsqueeze(0))
-                reqctx.append_token(next_token_id)
-                append_box(f"{model_name}-{lora_or_base}", reqctx.decode_tokens())
-                if reqctx.is_stop():
-                    append_box(f"{model_name}-{lora_or_base}", "\n------\n\n")
-                    self._delete_request(model_name, lora_or_base)
-                    self._create_request(model_name, lora_or_base)
-                    append_box(
-                        f"{model_name}-{lora_or_base}",
-                        self.reqctx[(model_name, lora_or_base)].decode_tokens(),
-                    )
+
+
 
 class TailLog(Label):
     def __init__(self, **kwargs):
