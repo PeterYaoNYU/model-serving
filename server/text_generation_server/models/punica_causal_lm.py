@@ -141,7 +141,7 @@ class PunicaLM(Model):
             torch_dtype=dtype,
             low_cpu_mem_usage=True,
             device_map=device,
-            #device_map=("auto"if torch.cuda.is_available() and torch.cuda.device_count() > 1 else None),
+            #device_map="auto" if torch.cuda.is_available() and torch.cuda.device_count() > 1 else None,
             load_in_8bit=quantize == "bitsandbytes",
             trust_remote_code=trust_remote_code,
         )
@@ -387,6 +387,11 @@ class PunicaLM(Model):
                     generated_text = GeneratedText(
                         output_text, stopping_criteria.current_tokens, reason, seed
                     )
+
+                    # release kv-cache
+                    self.cache_pool[str(request.id)].release()
+                    del self.cache_pool[str(request.id)]
+
                 else:
                     generated_text = None
 
