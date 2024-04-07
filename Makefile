@@ -12,6 +12,7 @@ codebase:
 	cp third_party/text-generation-inference/Cargo*.* build/
 	cp -r server build/
 	cp -r proto build/
+	cd build/server && make gen-server
 
 install-server:
 	cd build/server && make install
