@@ -1,3 +1,9 @@
-[submodule "third_party/punica"]
-	path = third_party/punica
-	url = https://github.com/punica-ai/punica.git
+[submodule "server/third_party/cutlass"]
+	path = server/third_party/cutlass
+	url = https://github.com/NVIDIA/cutlass
+[submodule "server/third_party/flashinfer"]
+	path = server/third_party/flashinfer
+	url = https://github.com/flashinfer-ai/flashinfer
+[submodule "third_party/text-generation-inference"]
+	path = third_party/text-generation-inference
+	url = https://github.com/huggingface/text-generation-inference

@@ -1,3 +1,4 @@
+server/_build_meta.py
 data/
 build/
 tmp/
@@ -9,7 +10,12 @@ __pycache__/
 *.so
 dist/
 .pytest_cache/
+LLaMA-Factory/
+wandb/
 model/
 *.env
 .coverage
 .vscode/
+_build_meta.py
+.idea/
+lora_weights/
