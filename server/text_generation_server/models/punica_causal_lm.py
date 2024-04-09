@@ -105,7 +105,7 @@ class PunicaLM(Model):
     def __init__(
         self,
         model_id: str = None,
-        lora_ids: List[str] = None,
+        lora_ids: Dict = None,
         revision: Optional[str] = None,
         quantize: Optional[str] = None,
         use_medusa: Optional[str] = None,
@@ -178,6 +178,7 @@ class PunicaLM(Model):
         self.lora_weights["empty"] = LlamaLoraWeight(
                 self.model_config, self.defalut_rank, dtype, device
             )
+        
         self.init_lora(
             lora_ids,
             self.model_config,
@@ -192,7 +193,7 @@ class PunicaLM(Model):
             device=device,
         )
 
-    def load_lora_adapters(self, lora_ids: list[str]):
+    def load_lora_adapters(self, lora_ids):
         self.init_lora(
             lora_ids,
             self.model_config,
@@ -212,17 +213,17 @@ class PunicaLM(Model):
 
     def init_lora(
             self,
-            lora_ids: list[str],
+            lora_ids: Dict,
             model_config: LlamaConfig,
             device: torch.device,
             dtype=torch.float16,
             ):
         if lora_ids is None:
             return
-        for lora_id in lora_ids:
+        for lora_id in lora_ids.keys():
             if lora_id not in self.lora_weights:
-                model_path = hf_hub_download(lora_id, filename='adapter_model.bin')
-                config_path = hf_hub_download(lora_id, filename='adapter_config.json')
+                model_path = hf_hub_download(lora_ids[lora_id], filename='adapter_model.bin')
+                config_path = hf_hub_download(lora_ids[lora_id], filename='adapter_config.json')
                 tmp = torch.load(model_path, map_location=device, weights_only=True)
                 lora_rank = peft.config.PeftConfigMixin.from_json_file(config_path)['r']
                 if lora_rank < 16:
@@ -245,6 +246,7 @@ class PunicaLM(Model):
         )
 
     @tracer.start_as_current_span("generate_token")
+    @torch.no_grad()
     def generate_token(
         self, batch: PunicaBatch
     )-> Tuple[List[Generation], Optional[PunicaBatch], Tuple[int, int]]:
