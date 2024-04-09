@@ -1,29 +1,24 @@
-# Pytorch-MIL
+## Build
+
+
 ```bash
+# Conda
+mamba create -y -n framework python=3.10
+mamba activate framework
+
+# Punica Requirement: CUDA 12.1, PyTorch 2.1
+# GPU Requirement: >= sm_80 (e.g., RTX 4090, RTX A6000, A100, A10G, L4)
+pip install ninja torch
 git submodule sync
-git submodule update --init
+git submodule update --init --recursive
+pip install -v --no-build-isolation third_party/punica
+
+# Framework
+pip install -v --no-build-isolation -e .[dev]
 ```
 
-## To compile server code with kernels
-
-Make sure you compile/install FlashInfer first.
+## Example
 
 ```bash
-make codebase
-make install-server
-```
-
-You can debug/edit code in the build folder. When done, use python copy_back.py to copy changes back to the original src folder.
-
-
-## To compile all
-
-```bash
-make install
-```
-
-## To test Punica code
-
-```bash
-HF_HUB_ENABLE_HF_TRANSFER=1 pytest -s -vv --disable-pytest-warnings -m "punica_test" build/server/tests
+python examples/textgen-api-demo.py
 ```

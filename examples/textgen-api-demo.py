@@ -1,3 +1,5 @@
+# adapt from https://github.com/punica-ai/punica/blob/4d5b49fd0ff65c5572c458698f794204d952f87f/examples/tui-multi-lora.py
+
 import dataclasses
 import json
 import pathlib
@@ -5,13 +7,61 @@ import random
 
 import numpy as np
 import torch
-from typing import Optional
+
+from framework.textgen import BatchedTextGeneration
+
 
 @dataclasses.dataclass
 class LoraSpec:
+    weight_path: pathlib.Path
     lora_prompts: list[str]
     base_prompts: list[str]
-    weight_path: Optional[str]
+
+
+def main():
+    project_root = pathlib.Path(__file__).parents[1]
+    model_dir = project_root / "model"
+    lora_specs: dict[str, LoraSpec] = {}
+    for name, spec in DEMO.items():
+        weight_path = spec.download(model_dir)
+        lora_prompts, base_prompts = spec.generate_prompts()
+        lora_specs[name] = LoraSpec(weight_path, lora_prompts, base_prompts)
+
+    dtype = torch.float16
+    device = torch.device("cuda:0")
+    base_model = "/models/base/Llama-2-7b-hf"
+    lora_rank = 16
+    engine = BatchedTextGeneration(base_model, lora_rank, dtype, device)
+
+    for app_name, spec in lora_specs.items():
+        engine.load_lora_weight(app_name, str(spec.weight_path))
+        for lora_or_base in ["lora", "base"]:
+            if lora_or_base == "lora":
+                prompts = spec.lora_prompts
+                lora_id = app_name
+            elif lora_or_base == "base":
+                prompts = spec.base_prompts
+                lora_id = engine.empty_lora_id
+
+            prompt = random.choice(prompts)
+            reqid = f"{app_name}_{lora_or_base}"
+            engine.add_request(
+                reqid,
+                lora_id,
+                input_ids=None,
+                input_text=prompt,
+                temperature=0.9,
+                repetition_penalty=1.5,
+                top_p=0.9,
+                top_k=-1,
+            )
+
+    while True:
+        out = engine.step()
+        if not out:
+            break
+        print(out)
+
 
 @dataclasses.dataclass
 class DemoSpec:
@@ -54,7 +104,7 @@ DEMO = {}
 
 
 DEMO["gsm8k"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/gsm8k-llama2-7b-lora-16/resolve/main/gsm8k-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/gsm8k-llama2-7b-lora-16/resolve/main/gsm8k-r16.punica.pt",
     system="Answer the following Grade School Math problem.",
     lora_template="<<SYS>>\n{system}\n<</SYS>>\n[INST] {question} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] {question} [/INST]\n",
@@ -79,7 +129,7 @@ DEMO["gsm8k"] = DemoSpec(
 )
 
 DEMO["sqlctx"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/sqlctx-llama2-7b-lora-16/resolve/main/sqlctx-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/sqlctx-llama2-7b-lora-16/resolve/main/sqlctx-r16.punica.pt",
     system="Generate a correct SQL query from the following database schema.",
     lora_template="<<SYS>>\n{system}\n{context}\n<</SYS>>\n[INST] {question} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] Context: {context}\nQuestion: {question} [/INST]\n",
@@ -104,7 +154,7 @@ DEMO["sqlctx"] = DemoSpec(
 )
 
 DEMO["viggo"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/viggo-llama2-7b-lora-16/resolve/main/viggo-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/viggo-llama2-7b-lora-16/resolve/main/viggo-r16.punica.pt",
     system="Generate a description based on the following representation.",
     lora_template="<<SYS>>\n{system}\n<</SYS>>\n[INST] {meaning_representation} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] {meaning_representation} [/INST]\n",
@@ -127,3 +177,6 @@ DEMO["viggo"] = DemoSpec(
 {"gem_id": "viggo-test-1082", "meaning_representation": "verify_attribute(name[Uncharted 4: A Thief's End], rating[excellent], genres[action-adventure, shooter])", "target": "You mentioned that you thought Uncharted 4: A Thief's End was an absolutely amazing game. Is the action-adventure shooter genre something right up your alley?", "references": ["You mentioned that you thought Uncharted 4: A Thief's End was an absolutely amazing game. Is the action-adventure shooter genre something right up your alley?"]}
 """,
 )
+
+if __name__ == "__main__":
+    main()
