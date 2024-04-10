@@ -173,9 +173,8 @@ if __name__ == '__main__':
     model_dir = project_root / "model"
     lora_specs = {}
     for name, spec in DEMO.items():
-        weight_path = spec.download(model_dir)
         lora_prompts, base_prompts = spec.generate_prompts()
-        lora_specs[name] = LoraSpec(lora_prompts, base_prompts, weight_path)
+        lora_specs[name] = LoraSpec(lora_prompts, base_prompts)
 
     logic = MultiLora(lora_specs)
     tui = MultiLoraTui(list(DEMO.keys()))
@@ -190,4 +189,4 @@ if __name__ == '__main__':
     thread.start()
     tui.run()
     logic.stop()
-    thread.join()   
+    thread.join()

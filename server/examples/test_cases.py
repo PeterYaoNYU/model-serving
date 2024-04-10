@@ -11,7 +11,7 @@ from typing import Optional
 class LoraSpec:
     lora_prompts: list[str]
     base_prompts: list[str]
-    weight_path: Optional[str]
+    weight_path: Optional[str] = None
 
 @dataclasses.dataclass
 class DemoSpec:
