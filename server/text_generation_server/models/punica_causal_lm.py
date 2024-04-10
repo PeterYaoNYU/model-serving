@@ -201,7 +201,7 @@ class PunicaLM(Model):
             )
 
     def remove_lora_adapters(self, lora_ids: list[str] = None):
-        if not lora_ids:
+        if (not lora_ids) or (lora_ids == '') or (lora_ids == 'all'):
             lora_ids = list(self.lora_weights)
         for lora_id in lora_ids:
             if lora_id != 'empty' and lora_id in self.lora_weights:
