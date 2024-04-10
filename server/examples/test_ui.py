@@ -125,8 +125,7 @@ class MultiLora:
             if batch:
                 generations, batch, timing = self.model.generate_token(batch)
                 for gen in generations:
-                    if gen.generated_text is not None:
-                        append_box(self.req_log[str(gen.request_id)], gen.generated_text.text)
+                        append_box(self.req_log[str(gen.request_id)], gen.tokens.texts[0])
                         #print(gen.request_id, gen.generated_text.text)
                         
 
