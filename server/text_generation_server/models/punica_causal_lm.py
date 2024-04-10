@@ -220,7 +220,7 @@ class PunicaLM(Model):
             ):
         if lora_ids is None:
             return
-        for lora_id in lora_ids.keys():
+        for lora_id in lora_ids:
             if lora_id not in self.lora_weights:
                 model_path = hf_hub_download(lora_ids[lora_id], filename='adapter_model.bin')
                 config_path = hf_hub_download(lora_ids[lora_id], filename='adapter_config.json')

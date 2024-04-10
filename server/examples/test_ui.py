@@ -1,6 +1,6 @@
 from text_generation_server.utils.punica_utils import BatchedKvCache, BatchLenInfo, KvPool, KvCache
 from text_generation_server.models.custom_modeling.punica_llama_lora import BatchedLlamaLoraWeight, LlamaLoraWeight
-from text_generation_server.models.punica_causal_lm import PunicaLM, LlamaForCausalLM
+from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 
 from text_generation_server.pb import generate_pb2_grpc, generate_pb2
 
@@ -35,14 +35,15 @@ class MultiLora:
         self.base_model = "meta-llama/Llama-2-7b-hf"
         # Load base model
         self.model = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
-                               lora_ids=['abcdabcd987/gsm8k-llama2-7b-lora-16',
-                                         'abcdabcd987/sqlctx-llama2-7b-lora-16',
-                                         'abcdabcd987/viggo-llama2-7b-lora-16'])
+                               lora_ids={'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
+                                        'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
+                                        'viggo':'abcdabcd987/viggo-llama2-7b-lora-16'})
         self.tokenizer = self.model.tokenizer
         self.rid = 0
 
         # Create text generation requests
-        self.reqctx: dict[tuple[str, str], generate_pb2.Request] = {}
+        self.reqctx = []
+        self.reqname = {}
         for model_name in lora_specs:
             for lora_or_base in ["lora", "base"]:
                 self._create_request(model_name, lora_or_base)
@@ -61,20 +62,23 @@ class MultiLora:
             inputs=prompt,
             lora_id=lora_id,
             id=self.rid,
-            truncate=1024,
+            truncate=256,
             prefill_logprobs=True,
             top_n_tokens=20,
             parameters=generate_pb2.NextTokenChooserParameters(
                 temperature=0.9,
-                top_k=0,
+                top_k=10,
                 top_p=0.9,
-                repetition_penalty=1.1,),
+                typical_p=0.9,
+                repetition_penalty=1.1,
+            ),
             stopping_parameters=generate_pb2.StoppingCriteriaParameters(
-                max_new_tokens=1024,
+                max_new_tokens=256,
                 stop_sequences=[],
                 ignore_eos_token=True))
         self.rid += 1
-        self.reqctx[(model_name, lora_or_base)] = {"request": request, "is_prefill": False}
+        self.reqctx.append(request) #{"request": request, "is_prefill": False}
+        self.reqname[request.id] = f'{model_name}-{lora_or_base}'
 
     def _delete_request(
         self,
@@ -92,20 +96,30 @@ class MultiLora:
         self,
         append_box: Callable[[str, str], None],
     ):
+        running_batch = None
         time.sleep(0.1)
-        for (model_name, lora_or_base), reqctx in self.reqctx.items():
-            append_box(f"{model_name}-{lora_or_base}", reqctx.inputs)
+        for req in self.reqctx:
+            append_box(self.reqname[req.id], req.inputs)
 
         while not self.stop_signal.is_set():
-            # Put prefill requests first, then sort by lora_id.
-            reqs = sorted(
-                self.reqctx.items(),
-                key=lambda kv: (not kv[1]["is_prefill"], kv[1].lora_id),
-            )
+            # Sort by id.
+            if self.reqctx:
+                reqs = sorted(
+                    self.reqctx,
+                    key=lambda req: req.lora_id,
+                )
+                new_batch = generate_pb2.Batch(id=int(time.time()), requests=reqs, size=len(reqs))
+                new_batch = PunicaBatch.from_pb(new_batch, self.tokenizer, torch.float32, torch.device("cuda"))
+                if running_batch:
+                    running_batch = PunicaBatch.concatenate([running_batch, new_batch])
+                else:
+                    running_batch = new_batch
+                self.reqctx = []
 
-
-
-
+            if running_batch:
+                generations, running_batch, timing = self.model.generate_token(running_batch)
+                for gen in generations:
+                    append_box(self.reqname[gen.request_id], gen.tokens.texts[0])
 
 class TailLog(Label):
     def __init__(self, **kwargs):
