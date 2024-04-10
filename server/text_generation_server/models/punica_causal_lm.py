@@ -200,8 +200,8 @@ class PunicaLM(Model):
             device=self.device
             )
 
-    def remove_lora_adapters(self, lora_ids: list[str]):
-        if len(lora_ids) == 1 and lora_ids[0] == 'all':
+    def remove_lora_adapters(self, lora_ids: list[str] = None):
+        if not lora_ids:
             lora_ids = list(self.lora_weights)
         for lora_id in lora_ids:
             if lora_id != 'empty' and lora_id in self.lora_weights:

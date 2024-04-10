@@ -6,38 +6,46 @@ import torch
 from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 import random
+from test_cases import DEMO, LoraSpec
 
 model = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
-               lora_ids=['hfl/chinese-alpaca-2-lora-7b'])
+               lora_ids={'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
+                         'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
+                         'viggo':'abcdabcd987/viggo-llama2-7b-lora-16'})
 print(model.get_lora_adapters())
 
-model.remove_lora_adapters(['all'])
+model.remove_lora_adapters(['gsm8k'])
+print(model.get_lora_adapters())
+model.remove_lora_adapters()
 print(model.get_lora_adapters())
 
-model.load_lora_adapters(['FinGPT/fingpt-forecaster_dow30_llama2-7b_lora', 'hfl/chinese-alpaca-2-lora-7b'])
+model.load_lora_adapters({'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
+                         'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
+                         'viggo':'abcdabcd987/viggo-llama2-7b-lora-16'})
 print(model.get_lora_adapters())
 
 tokenizer = model.tokenizer
 
-#print(tokenizer.decode([    1,  1724,   338,  6483,  6509, 29973, 21784], skip_special_tokens=True))
+lora_specs = {}
+for name, spec in DEMO.items():
+    lora_prompts, base_prompts = spec.generate_prompts()
+    lora_specs[name] = LoraSpec(lora_prompts, base_prompts)
 
-def make_input(id = 0):
-    sentences = [
-        'What is deep learning?',
-        'What is the future of the America economy?',
-        '什么是人工智能？',
-    ]
-
-    lora_id = [
-        "empty",
-        "hfl/chinese-alpaca-2-lora-7b",
-        "FinGPT/fingpt-forecaster_dow30_llama2-7b_lora",
-    ]
+def make_input(model_name, lora_or_base, id = 0):
+    if lora_or_base == "lora":
+        prompts = lora_specs[model_name].lora_prompts
+        lora_id = model_name
+    elif lora_or_base == "base":
+        prompts = lora_specs[model_name].base_prompts
+        lora_id = "empty"
+    else:
+        raise ValueError(f"Unknown lora_or_base={lora_or_base}")
+    prompt = random.choice(prompts)
 
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
-        inputs=sentences[id],
-        lora_id=lora_id[id],
+        inputs=prompt,
+        lora_id=lora_id,
         id=id,
         truncate=1024,
         prefill_logprobs=True,
@@ -61,15 +69,10 @@ def make_input(id = 0):
     return request
 
 #ok
-requests = [make_input(0), make_input(1)]
-#ok
-requests = [make_input(1), make_input(1)]
-#ok
-requests = [make_input(0), make_input(2)]
-#doesn't show correctly
-requests = [make_input(2), make_input(2)]
-#RuntimeError: CUDA error: CUBLAS_STATUS_INTERNAL_ERROR when calling `cublasGemmEx( handle, opa, opb, m, n, k, &falpha, a, CUDA_R_16F, lda, b, CUDA_R_16F, ldb, &fbeta, c, CUDA_R_16F, ldc, CUDA_R_32F, CUBLAS_GEMM_DEFAULT_TENSOR_OP)`
-requests = [make_input(1), make_input(2)]
+#
+#requests = [make_input('gsm8k', 'lora')]
+requests = [make_input('gsm8k', 'base'), make_input('gsm8k', 'base')]
+#requests = [make_input('gsm8k', 'base'), make_input('gsm8k', 'lora')]
 
 batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 pb_batch = PunicaBatch.from_pb(batch, tokenizer, torch.float32, torch.device("cuda"))
@@ -77,7 +80,7 @@ results = []
 for i in range(50):
     generations, pb_batch, _ = model.generate_token(pb_batch)
     for gen in generations:
-        print(gen.tokens.texts)
+        #print(gen.tokens.texts[0])
         results.append(gen.tokens.texts)
 
 print(''.join([r[0] for r in results]))
