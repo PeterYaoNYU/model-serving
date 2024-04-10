@@ -6,30 +6,32 @@ import torch
 from text_generation_server.utils import weight_hub_files, download_weights
 from text_generation_server.models.punica_causal_lm import PunicaLM, PunicaBatch
 import random
+from test_cases import DEMO, LoraSpec
 
 # put this file in ROOT\server, so you don't need to compile TGI
 
 # Start the local server:
 # SAFETENSORS_FAST_GPU=1 python -m torch.distributed.run --nproc_per_node=1 text_generation_server/cli.py serve meta-llama/Llama-2-7b-hf
+lora_specs = {}
+for name, spec in DEMO.items():
+    lora_prompts, base_prompts = spec.generate_prompts()
+    lora_specs[name] = LoraSpec(lora_prompts, base_prompts)
 
-def make_input():
-    sentences = [
-        'What is deep learning?',
-        'What is the future of the earth?',
-        'Generate a correct SQL query from the following database schema.',
-    ]
+def make_input(model_name, lora_or_base, id = 0):
+    if lora_or_base == "lora":
+        prompts = lora_specs[model_name].lora_prompts
+        lora_id = model_name
+    elif lora_or_base == "base":
+        prompts = lora_specs[model_name].base_prompts
+        lora_id = "empty"
+    else:
+        raise ValueError(f"Unknown lora_or_base={lora_or_base}")
+    prompt = random.choice(prompts)
 
-    lora_id = [
-        "empty",
-        "hfl/chinese-alpaca-2-lora-7b",
-        "FinGPT/fingpt-forecaster_dow30_llama2-7b_lora",
-    ]
-
-    id = random.randint(0, len(sentences)-1)
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
-        inputs=sentences[id],
-        lora_id=lora_id[id],
+        inputs=prompt,
+        lora_id=lora_id,
         id=0,
         truncate=1024,
         prefill_logprobs=True,
@@ -52,8 +54,8 @@ def make_input():
             ignore_eos_token=True))
     return request
 
-req1 = make_input()
-req2 = make_input()
+req1 = make_input('gsm8k', 'base')
+req2 = make_input('gsm8k', 'lora')
 requests = [req1, req2]
 
 # Assemble input batch
@@ -68,7 +70,7 @@ with grpc.insecure_channel("unix:///tmp/text-generation-server-0") as channel:
         operation='remove'
     ))
     stub.AdapterControl(generate_pb2.AdapterControlRequest(
-        lora_ids='hfl/chinese-alpaca-2-lora-7b,FinGPT/fingpt-forecaster_dow30_llama2-7b_lora',
+        lora_ids='gsm8k:abcdabcd987/gsm8k-llama2-7b-lora-16,sqlctx:abcdabcd987/sqlctx-llama2-7b-lora-16,viggo:abcdabcd987/viggo-llama2-7b-lora-16',
         operation='load'
     ))
     resp = stub.AdapterControl(generate_pb2.AdapterControlRequest(

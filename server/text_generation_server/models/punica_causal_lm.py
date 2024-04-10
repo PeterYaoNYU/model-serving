@@ -200,8 +200,8 @@ class PunicaLM(Model):
             device=self.device
             )
 
-    def remove_lora_adapters(self, lora_ids: list[str]):
-        if len(lora_ids) == 1 and lora_ids[0] == 'all':
+    def remove_lora_adapters(self, lora_ids: list[str] = None):
+        if (not lora_ids) or (lora_ids == '') or (lora_ids == 'all'):
             lora_ids = list(self.lora_weights)
         for lora_id in lora_ids:
             if lora_id != 'empty' and lora_id in self.lora_weights:
@@ -220,7 +220,7 @@ class PunicaLM(Model):
             ):
         if lora_ids is None:
             return
-        for lora_id in lora_ids.keys():
+        for lora_id in lora_ids:
             if lora_id not in self.lora_weights:
                 model_path = hf_hub_download(lora_ids[lora_id], filename='adapter_model.bin')
                 config_path = hf_hub_download(lora_ids[lora_id], filename='adapter_config.json')

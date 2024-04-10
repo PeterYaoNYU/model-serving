@@ -162,15 +162,20 @@ class TextGenerationService(generate_pb2_grpc.TextGenerationServiceServicer):
         )
 
     async def AdapterControl(self, request, contexts):
+        if request.operation == 'status':
+            adapters = self.model.get_lora_adapters()
+            return generate_pb2.AdapterControlResponse(status= str(adapters))
+
         if request.operation == 'load':
-            self.model.load_lora_adapters(request.lora_ids.split(','))
+            lora_ids = {}
+            for item in request.lora_ids.split(','):
+                l = item.split(':')
+                lora_ids[l[0]] = l[1]
+            self.model.load_lora_adapters(lora_ids)
             return generate_pb2.AdapterControlResponse(status= "success")
         elif request.operation == 'remove':
             self.model.remove_lora_adapters(request.lora_ids.split(','))
             return generate_pb2.AdapterControlResponse(status= "success")
-        elif request.operation == 'status':
-            adapters = self.model.get_lora_adapters()
-            return generate_pb2.AdapterControlResponse(status= str(adapters))
 
 
 

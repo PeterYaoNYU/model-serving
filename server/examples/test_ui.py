@@ -34,20 +34,16 @@ class MultiLora:
         self.stop_signal = threading.Event()
         self.base_model = "meta-llama/Llama-2-7b-hf"
         # Load base model
-        self.model = PunicaLM(
-            model_id="meta-llama/Llama-2-7b-hf",
-            lora_ids={
-                'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
-                'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
-                'viggo':'abcdabcd987/viggo-llama2-7b-lora-16',
-                }
-            )
+        self.model = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
+                               lora_ids={'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
+                                        'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
+                                        'viggo':'abcdabcd987/viggo-llama2-7b-lora-16'})
         self.tokenizer = self.model.tokenizer
         self.rid = 0
 
         # Create text generation requests
         self.reqctx = []
-        self.req_log = {}
+        self.reqname = {}
         for model_name in lora_specs:
             for lora_or_base in ["lora", "base"]:
                 self._create_request(model_name, lora_or_base)
@@ -61,7 +57,6 @@ class MultiLora:
             lora_id = "empty"
         else:
             raise ValueError(f"Unknown lora_or_base={lora_or_base}")
-        
         prompt = random.choice(prompts)
         request = generate_pb2.Request(
             inputs=prompt,
@@ -76,15 +71,14 @@ class MultiLora:
                 top_p=0.9,
                 typical_p=0.9,
                 repetition_penalty=1.1,
-                ),
+            ),
             stopping_parameters=generate_pb2.StoppingCriteriaParameters(
                 max_new_tokens=256,
                 stop_sequences=[],
                 ignore_eos_token=True))
         self.rid += 1
-        self.reqctx.append(request)
-        self.req_log[str(request.id)] = f'{model_name}-{lora_or_base}'
-
+        self.reqctx.append(request) #{"request": request, "is_prefill": False}
+        self.reqname[request.id] = f'{model_name}-{lora_or_base}'
 
     def _delete_request(
         self,
@@ -102,32 +96,30 @@ class MultiLora:
         self,
         append_box: Callable[[str, str], None],
     ):
-        batch = None
+        running_batch = None
         time.sleep(0.1)
         for req in self.reqctx:
-            append_box(self.req_log[str(req.id)], req.inputs)
+            append_box(self.reqname[req.id], req.inputs)
 
         while not self.stop_signal.is_set():
-            #Sort by id.
+            # Sort by id.
             if self.reqctx:
                 reqs = sorted(
                     self.reqctx,
-                    key=lambda req: req.id,
+                    key=lambda req: req.lora_id,
                 )
                 new_batch = generate_pb2.Batch(id=int(time.time()), requests=reqs, size=len(reqs))
-                new_batch = PunicaBatch.from_pb(new_batch, self.tokenizer, torch.float16, torch.device("cuda"))
-                if batch is not None:
-                    batch = PunicaBatch.concatenate([batch, new_batch])
+                new_batch = PunicaBatch.from_pb(new_batch, self.tokenizer, torch.float32, torch.device("cuda"))
+                if running_batch:
+                    running_batch = PunicaBatch.concatenate([running_batch, new_batch])
                 else:
-                    batch = new_batch
+                    running_batch = new_batch
                 self.reqctx = []
 
-            if batch:
-                generations, batch, timing = self.model.generate_token(batch)
+            if running_batch:
+                generations, running_batch, timing = self.model.generate_token(running_batch)
                 for gen in generations:
-                        append_box(self.req_log[str(gen.request_id)], gen.tokens.texts[0])
-                        #print(gen.request_id, gen.generated_text.text)
-                        
+                    append_box(self.reqname[gen.request_id], gen.tokens.texts[0])
 
 class TailLog(Label):
     def __init__(self, **kwargs):
@@ -195,9 +187,8 @@ if __name__ == '__main__':
     model_dir = project_root / "model"
     lora_specs = {}
     for name, spec in DEMO.items():
-        weight_path = spec.download(model_dir)
         lora_prompts, base_prompts = spec.generate_prompts()
-        lora_specs[name] = LoraSpec(lora_prompts, base_prompts, weight_path)
+        lora_specs[name] = LoraSpec(lora_prompts, base_prompts)
 
     logic = MultiLora(lora_specs)
     tui = MultiLoraTui(list(DEMO.keys()))

@@ -11,7 +11,7 @@ from typing import Optional
 class LoraSpec:
     lora_prompts: list[str]
     base_prompts: list[str]
-    weight_path: Optional[str]
+    weight_path: Optional[str] = None
 
 @dataclasses.dataclass
 class DemoSpec:
@@ -54,7 +54,7 @@ DEMO = {}
 
 
 DEMO["gsm8k"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/gsm8k-llama2-7b-lora-16/resolve/main/gsm8k-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/gsm8k-llama2-7b-lora-16/resolve/main/gsm8k-r16.punica.pt",
     system="Answer the following Grade School Math problem.",
     lora_template="<<SYS>>\n{system}\n<</SYS>>\n[INST] {question} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] {question} [/INST]\n",
@@ -79,7 +79,7 @@ DEMO["gsm8k"] = DemoSpec(
 )
 
 DEMO["sqlctx"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/sqlctx-llama2-7b-lora-16/resolve/main/sqlctx-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/sqlctx-llama2-7b-lora-16/resolve/main/sqlctx-r16.punica.pt",
     system="Generate a correct SQL query from the following database schema.",
     lora_template="<<SYS>>\n{system}\n{context}\n<</SYS>>\n[INST] {question} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] Context: {context}\nQuestion: {question} [/INST]\n",
@@ -104,7 +104,7 @@ DEMO["sqlctx"] = DemoSpec(
 )
 
 DEMO["viggo"] = DemoSpec(
-    weight_url="https://hf-mirror.com/abcdabcd987/viggo-llama2-7b-lora-16/resolve/main/viggo-r16.punica.pt",
+    weight_url="https://huggingface.co/abcdabcd987/viggo-llama2-7b-lora-16/resolve/main/viggo-r16.punica.pt",
     system="Generate a description based on the following representation.",
     lora_template="<<SYS>>\n{system}\n<</SYS>>\n[INST] {meaning_representation} [/INST]\n",
     base_template="<<SYS>>\n{system}\n<</SYS>>\n{examples}[INST] {meaning_representation} [/INST]\n",
