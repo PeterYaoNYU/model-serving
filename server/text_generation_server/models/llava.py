@@ -5,8 +5,8 @@ import torch
 from text_generation_server.utils.punica_utils import BatchedKvCache, BatchLenInfo, KvPool, KvCache
 from .custom_modeling.embedding_llama import LlamaForCausalLM
 
-import os
 import time
+import json
 from opentelemetry import trace
 from typing import Optional, Tuple, List, Type, Dict
 from text_generation_server.models import Model
@@ -19,7 +19,7 @@ from text_generation_server.models.types import (
 )
 from text_generation_server.utils import Sampling
 from dataclasses import dataclass
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoConfig, LlavaConfig
 from huggingface_hub import hf_hub_download
 
 from loguru import logger
@@ -92,7 +92,7 @@ class LlavaLM(Model):
             else:
                 tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
-        self.model_config = model.config
+        self.model_config = AutoConfig.from_pretrained(model_id)
         self.kvpool = KvPool(
             num_layers=self.model_config.num_hidden_layers,
             num_heads=self.model_config.num_attention_heads,
@@ -103,9 +103,12 @@ class LlavaLM(Model):
         )
         self.cache_pool = {}
 
-        self.vision_model = self.build_vision_model(self.model_config)
+        with open(hf_hub_download(self.model_id, filename='config.json')) as f:
+            mm_config = json.loads(f.read())
+
+        self.vision_model = self.build_vision_model(mm_config)
         self.vision_model.to(self.device).eval()
-        self.projector = self.build_projector(self.model_config)
+        self.projector = self.build_projector(mm_config)
         self.projector.to(self.device).eval()
         self.id_embedder = self.model.model.embed_tokens
         self.additional_init_length = 576 # 512 + 64 I guess
@@ -119,10 +122,6 @@ class LlavaLM(Model):
         )
         logger.info(f"Initialized LlavaLM with model_id: {model_id}")
 
-    def build_tokenizer(self, model_path, **kwargs):
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        return tokenizer
-
     def build_vision_model(self, model_config, **kwargs):
         from .llava_models.encoder.encoder import CLIPVisionTower
         mm_vision_tower = "openai/clip-vit-large-patch14-336"
@@ -131,7 +130,7 @@ class LlavaLM(Model):
     def build_projector(self, model_config, **kwargs):
         from .llava_models.projector.builder import build_vision_projector
         projector = build_vision_projector(model_config, **kwargs)
-        model_path = hf_hub_download(self.model_id, filename='adapter_model.bin')
+        model_path = hf_hub_download(self.model_id, filename='mm_projector.bin')
         state_dict = torch.load(model_path)
         new_state_dict = {
             '0.weight': state_dict['model.mm_projector.0.weight'],
