@@ -20,6 +20,7 @@ from text_generation_server.models.types import (
 from text_generation_server.utils import Sampling
 from dataclasses import dataclass
 from transformers import AutoTokenizer
+from huggingface_hub import hf_hub_download
 
 from loguru import logger
 tracer = trace.get_tracer(__name__)
@@ -54,7 +55,7 @@ class LlavaLM(Model):
             dtype = torch.float32 if dtype is None else dtype
 
         self.device = device
-
+        self.model_id = model_id
         tokenizer = AutoTokenizer.from_pretrained(
             model_id,
             revision=revision,
@@ -123,14 +124,15 @@ class LlavaLM(Model):
         return tokenizer
 
     def build_vision_model(self, model_config, **kwargs):
-        from llava_models.encoder.encoder import CLIPVisionTower
+        from .llava_models.encoder.encoder import CLIPVisionTower
         mm_vision_tower = "openai/clip-vit-large-patch14-336"
         return CLIPVisionTower(mm_vision_tower, args=model_config, **kwargs)
     
     def build_projector(self, model_config, **kwargs):
-        from llava_models.projector.builder import build_vision_projector
+        from .llava_models.projector.builder import build_vision_projector
         projector = build_vision_projector(model_config, **kwargs)
-        state_dict = torch.load('checkpoints/llava-v1.5-7b/mm_projector.bin')
+        model_path = hf_hub_download(self.model_id, filename='adapter_model.bin')
+        state_dict = torch.load(model_path)
         new_state_dict = {
             '0.weight': state_dict['model.mm_projector.0.weight'],
             '0.bias': state_dict['model.mm_projector.0.bias'],
@@ -393,3 +395,7 @@ class LlavaLM(Model):
         forward_ns = start_decode - start
         decode_ns = time.time_ns() - start_decode
         return generations, batch, (forward_ns, decode_ns)
+    
+if __name__ == '__main__':
+    model = LlavaLM(model_id='liuhaotian/llava-v1.5-7b')
+    print(model)
