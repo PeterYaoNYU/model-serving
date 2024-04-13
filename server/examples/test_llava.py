@@ -1,7 +1,7 @@
 from text_generation_server.pb import generate_pb2_grpc, generate_pb2
-from text_generation_server.models.llava import LlavaLM, LlavaBatch
-import random, torch
-from PIL import Image
+from text_generation_server.models.llava_causal_lm import LlavaLM, LlavaBatch
+import random, torch, torchvision
+import base64
 
 model = LlavaLM(model_id="liuhaotian/llava-v1.5-7b")
 print(model)
@@ -16,21 +16,20 @@ prompts = [
     'What is the image about?',
 ]
 
-def load_img(img_path, image_processor=None):
-    img = Image.open(img_path).convert('RGB')
-    if image_processor:
-        img = image_processor(img, return_tensors='pt')['pixel_values'].squeeze(0)
-    return img
+def load_img_base64s(img_path):
+    with open(img_path, "rb") as image_file:
+        img_encoded = base64.b64encode(image_file.read())
+        return img_encoded
     
 def get_input(prompt):
     input = 'USER: '+ prompt + ' ASSISTANT: '
     return input
 
-def make_input(id = 0):
+def make_input(jpg_path, id = 0):
     prompt = random.choice(prompts)
     request = generate_pb2.Request(
         inputs=get_input(prompt),
-        img = load_img('test.jpg', image_processor=model.vision_model.image_processor),
+        inputb = load_img_base64s(jpg_path),
         lora_id=None,
         id=id,
         truncate=1024,
@@ -54,7 +53,7 @@ def make_input(id = 0):
             ignore_eos_token=True))
     return request
 
-requests = [make_input() for _ in range(5)]
+requests = [make_input('test.jpg') for _ in range(5)]
 batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 pb_batch = LlavaBatch.from_pb(batch, tokenizer, torch.float16, torch.device("cuda"))
 

@@ -121,6 +121,8 @@ message Request {
     uint32 top_n_tokens = 7;
     /// LoRA adapter id
     string lora_id = 8;
+    /// Binary inputs, e.g., image
+    string inputb = 9;
 }
 
 message Batch {

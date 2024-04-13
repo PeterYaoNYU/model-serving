@@ -23,6 +23,9 @@ from transformers import AutoTokenizer, AutoConfig, LlavaConfig
 from huggingface_hub import hf_hub_download
 
 from loguru import logger
+from PIL import Image
+from io import BytesIO
+import base64
 tracer = trace.get_tracer(__name__)
 
 from .causal_lm import CausalLMBatch
@@ -154,8 +157,11 @@ class LlavaLM(Model):
     def prefill_token(
         self, batch: LlavaBatch
     ):
-        imgs = [r.img for r in batch.requests]
-        img_features = self.vision_model(imgs)
+        img_features = []
+        for r in batch.requests:
+            img = Image.open(r.inputb).convert('RGB')
+            img = self.vision_model.image_processor(img, return_tensors='pt')['pixel_values'].squeeze(0)
+            img_features.append(self.vision_model(img))
         img_features = torch.stack(img_features, dim=0)
         if self.projector:
             img_features = self.projector(img_features)
