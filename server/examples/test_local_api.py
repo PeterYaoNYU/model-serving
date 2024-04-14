@@ -9,9 +9,7 @@ import random
 from test_cases import DEMO, LoraSpec
 
 model = PunicaLM(model_id="meta-llama/Llama-2-7b-hf",
-               lora_ids={'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16',
-                         'sqlctx':'abcdabcd987/sqlctx-llama2-7b-lora-16',
-                         'viggo':'abcdabcd987/viggo-llama2-7b-lora-16'})
+               lora_ids={'gsm8k':'abcdabcd987/gsm8k-llama2-7b-lora-16'})
 print(model.get_lora_adapters())
 
 model.remove_lora_adapters(['gsm8k'])
@@ -40,14 +38,14 @@ def make_input(model_name, lora_or_base, id = 0):
         lora_id = "empty"
     else:
         raise ValueError(f"Unknown lora_or_base={lora_or_base}")
-    prompt = random.choice(prompts)
+    prompt = prompts[1] #random.choice(prompts)
 
     # Try out prefill / decode from the client side
     request = generate_pb2.Request(
         inputs=prompt,
         lora_id=lora_id,
         id=id,
-        truncate=1024,
+        truncate=256,
         prefill_logprobs=True,
         top_n_tokens=20,
         parameters=generate_pb2.NextTokenChooserParameters(
@@ -55,32 +53,28 @@ def make_input(model_name, lora_or_base, id = 0):
             top_k=10,
             top_p=0.9,
             typical_p=0.9,
-            do_sample=False,
-            seed=0,
-            repetition_penalty=1.0,
-            frequency_penalty=0.1,
-            watermark=True,
-            grammar='',
-            grammar_type=0),
+            repetition_penalty=1.1
+        ),
         stopping_parameters=generate_pb2.StoppingCriteriaParameters(
-            max_new_tokens=1024,
+            max_new_tokens=256,
             stop_sequences=[],
             ignore_eos_token=True))
     return request
 
-#ok
-#
-#requests = [make_input('gsm8k', 'lora')]
-requests = [make_input('gsm8k', 'base'), make_input('gsm8k', 'base')]
-#requests = [make_input('gsm8k', 'base'), make_input('gsm8k', 'lora')]
+#requests = [make_input('gsm8k', 'base', 0), make_input('gsm8k', 'lora', 1)]
+requests = [make_input('viggo', 'lora', 0), make_input('gsm8k', 'lora', 1), make_input('viggo', 'lora', 2)]
 
 batch = generate_pb2.Batch(id = 0, requests = requests, size = len(requests))
 pb_batch = PunicaBatch.from_pb(batch, tokenizer, torch.float32, torch.device("cuda"))
-results = []
-for i in range(50):
+results = {}
+for r in requests:
+    results[r.id] = []
+
+while pb_batch:
     generations, pb_batch, _ = model.generate_token(pb_batch)
     for gen in generations:
-        #print(gen.tokens.texts[0])
-        results.append(gen.tokens.texts)
+        results[gen.request_id].append(gen.tokens.texts)
 
-print(''.join([r[0] for r in results]))
+for id in results:
+    print(str(id) + '='*30)
+    print(''.join([r[0] for r in results[id]]))
