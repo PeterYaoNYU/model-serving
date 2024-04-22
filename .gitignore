@@ -1,6 +1,7 @@
 server/_build_meta.py
 data/
 tmp/
+build/
 .cache/
 .hypothesis/
 __pycache__/
