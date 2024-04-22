@@ -1,3 +1,0 @@
-cargo:rerun-if-changed=../../proto/generate.proto
-cargo:rerun-if-changed=../../proto/generate.proto
-cargo:rerun-if-changed=../../proto

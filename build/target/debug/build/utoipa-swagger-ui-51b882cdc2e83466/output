@@ -1,3 +1,0 @@
-cargo:rerun-if-changed=res/swagger-ui-5.3.1.zip
-cargo:rustc-env=UTOIPA_SWAGGER_UI_VERSION=swagger-ui-5.3.1
-cargo:rustc-env=UTOIPA_SWAGGER_DIR=/gpfsnyu/scratch/yy4108/torch-MIL/build/target/debug/build/utoipa-swagger-ui-51b882cdc2e83466/out
