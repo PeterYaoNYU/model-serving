@@ -325,9 +325,9 @@ def get_model(
             )
 
     elif model_type == "llama" or model_type == "baichuan":
-        if FLASHINFER_AVAILABLE:
-            return PunicaLM(model_id, lora_ids)
-        elif FLASH_ATTENTION:
+        # if FLASHINFER_AVAILABLE:
+        #     return PunicaLM(model_id, lora_ids)
+        if FLASH_ATTENTION:
             return FlashLlama(
                 model_id,
                 revision,

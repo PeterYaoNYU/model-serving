@@ -1,0 +1,6 @@
+cargo:rustc-env=VERGEN_GIT_SHA=ec6e4eabecf15c2aa538883bddefd5527a1b6ca1
+cargo:rerun-if-changed=/gpfsnyu/scratch/yy4108/torch-MIL/.git/HEAD
+cargo:rerun-if-changed=/gpfsnyu/scratch/yy4108/torch-MIL/.git/refs/heads/master
+cargo:rerun-if-changed=build.rs
+cargo:rerun-if-env-changed=VERGEN_IDEMPOTENT
+cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH

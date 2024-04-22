@@ -27,3 +27,15 @@ make install
 ```bash
 HF_HUB_ENABLE_HF_TRANSFER=1 pytest -s -vv --disable-pytest-warnings -m "punica_test" build/server/tests
 ```
+
+
+## Client Implementation: Direct communication to the server
+
+1. to generate the client stub and service stub of grpc   
+The current working dir is : /gpfsnyu/scratch/yy4108/torch-MIL/build/clients/python
+
+```bash
+python -m grpc_tools.protoc -I../../proto --python_out=. --grpc_python_out=. generate.proto
+```
+
+2. 

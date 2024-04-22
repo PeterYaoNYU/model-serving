@@ -1,6 +1,5 @@
 server/_build_meta.py
 data/
-build/
 tmp/
 .cache/
 .hypothesis/
